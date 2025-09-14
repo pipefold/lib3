@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => {
 
   const commonPlugins = [
     threeUniformGui({
-      persistent: true, // Saves tweaks to localStorage
+      persistent: false, // Saves tweaks to localStorage
       devOnly: true, // Only in dev mode
     }),
   ];
