@@ -25,8 +25,8 @@ importers:
         specifier: ^3.3.3
         version: 3.3.3
       tsl-uniform-ui-vite-plugin:
-        specifier: ^0.7.2
-        version: 0.7.2
+        specifier: bhushan6/tsl-Uniform-UI-Vite-Plugin#pull/1/head&path:package
+        version: https://codeload.github.com/bhushan6/tsl-Uniform-UI-Vite-Plugin/tar.gz/e10bb39f1a89591ffde93b361a7e18be7e16ac59#path:package
       tweakpane:
         specifier: ^4.0.5
         version: 4.0.5
@@ -805,8 +805,9 @@ packages:
     resolution: {integrity: sha512-65P7iz6X5yEr1cwcgvQxbbIw7Uk3gOy5dIdtZ4rDveLqhrdJP+Li/Hx6tyK0NEb+2GCyneCMJiGqrADCSNk8sQ==}
     engines: {node: '>=8.0'}
 
-  tsl-uniform-ui-vite-plugin@0.7.2:
-    resolution: {integrity: sha512-/AZ/foiWUT9MpRbKi7KEMJNvZlh4QqYrR6pIYnpncCB17EuCNfS70wW8BkKlcobQJ30yXOjpQdTCCJr6oNyp5A==}
+  tsl-uniform-ui-vite-plugin@https://codeload.github.com/bhushan6/tsl-Uniform-UI-Vite-Plugin/tar.gz/e10bb39f1a89591ffde93b361a7e18be7e16ac59#path:package:
+    resolution: {path: package, tarball: https://codeload.github.com/bhushan6/tsl-Uniform-UI-Vite-Plugin/tar.gz/e10bb39f1a89591ffde93b361a7e18be7e16ac59}
+    version: 0.7.2
 
   tweakpane-plugin-file-import@1.1.1:
     resolution: {integrity: sha512-7QbLToRTPYprzrZWJ1BWefIDJOyxj/9IHzVE/wZwK1+z1oUFtZ+ptzMxKm6apeZNoQTG7zS6opEaJi5tJ0igaQ==}
@@ -1576,7 +1577,7 @@ snapshots:
     dependencies:
       is-number: 7.0.0
 
-  tsl-uniform-ui-vite-plugin@0.7.2:
+  tsl-uniform-ui-vite-plugin@https://codeload.github.com/bhushan6/tsl-Uniform-UI-Vite-Plugin/tar.gz/e10bb39f1a89591ffde93b361a7e18be7e16ac59#path:package:
     dependencies:
       '@babel/parser': 7.28.4
       '@babel/traverse': 7.28.4

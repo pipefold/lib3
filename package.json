@@ -20,7 +20,7 @@
     "@tweakpane/plugin-essentials": "^0.2.1",
     "@types/three": "^0.180.0",
     "fast-glob": "^3.3.3",
-    "tsl-uniform-ui-vite-plugin": "^0.7.2",
+    "tsl-uniform-ui-vite-plugin": "bhushan6/tsl-Uniform-UI-Vite-Plugin#pull/1/head&path:package",
     "tweakpane": "^4.0.5",
     "tweakpane-plugin-file-import": "^1.1.1",
     "vite": "^7.1.5",
