@@ -1,24 +1,20 @@
 import {
-  Fn,
-  vec2,
-  vec3,
-  vec4,
+  abs,
+  clamp,
   float,
-  int,
-  uniform,
-  sin,
-  cos,
-  atan,
-  acos,
+  floor,
+  Fn,
+  instanceIndex,
   length,
   max,
   min,
-  clamp,
-  floor,
+  sin,
   step,
-  abs,
-  instanceIndex,
   textureStore,
+  uniform,
+  vec2,
+  vec3,
+  vec4,
 } from "three/tsl";
 
 // Pseudo 3D noise: cheap, fast, stable (-1..1). Not simplex, but good enough for modulation.
@@ -48,9 +44,8 @@ export const pseudoNoise3 = /*@__PURE__*/ Fn(({ p }) => {
 export const sphericalWaveDisplacement = /*@__PURE__*/ Fn(
   ({
     pos,
-    time = float(0),
+    phase = float(0),
     waveAmplitude = float(0.2),
-    waveSpeed = float(1.0),
     noiseScale = float(1.0),
     noiseAmplitude = float(0.5),
     center = vec3(0.0),
@@ -65,33 +60,24 @@ export const sphericalWaveDisplacement = /*@__PURE__*/ Fn(
     // Use normalized direction instead of spherical angles to avoid acos/atan
     const dir = p.div(safeR);
 
-    // Modulate amplitude and speed using simplex noise (higher quality)
+    // Modulate amplitude using simplex noise (higher quality)
     const noisePosAmp = vec3(
-      p.x.mul(noiseScale).mul(0.5).add(time.mul(0.05)),
-      p.y.mul(noiseScale).mul(0.5).add(time.mul(0.07)),
-      p.z.mul(noiseScale).mul(0.5).add(time.mul(0.06))
-    );
-    const noisePosSpd = vec3(
-      p.x.mul(noiseScale).mul(0.3).sub(time.mul(0.03)),
-      p.y.mul(noiseScale).mul(0.3).sub(time.mul(0.04)),
-      p.z.mul(noiseScale).mul(0.3).sub(time.mul(0.05))
+      p.x.mul(noiseScale).mul(0.5),
+      p.y.mul(noiseScale).mul(0.5),
+      p.z.mul(noiseScale).mul(0.5)
     );
 
     // [-1,1] -> [0,1]
     const amplitudeNoise = simplexNoise3({ v: noisePosAmp }).mul(0.5).add(0.5);
-    const speedNoise = simplexNoise3({ v: noisePosSpd }).mul(0.5).add(0.5);
 
     const localAmplitude = waveAmplitude.mul(
       float(1.0).add(amplitudeNoise.mul(noiseAmplitude))
-    );
-    const localSpeed = waveSpeed.mul(
-      float(1.0).add(speedNoise.mul(noiseAmplitude))
     );
 
     // Wave term; divide by radius to emphasize near the origin, clamp denominator
     const wave = r
       .mul(10.0)
-      .sub(time.mul(localSpeed))
+      .sub(phase)
       .sin()
       .div(max(r, float(0.1)));
 
@@ -108,9 +94,8 @@ export const sphericalWaveDisplacement = /*@__PURE__*/ Fn(
 export const displacedTexCoord = /*@__PURE__*/ Fn(
   ({
     texCoord,
-    time,
+    phase,
     waveAmplitude,
-    waveSpeed,
     noiseScale,
     noiseAmplitude,
     scale = float(0.1),
@@ -118,9 +103,8 @@ export const displacedTexCoord = /*@__PURE__*/ Fn(
     const local = texCoord.sub(0.5);
     const offset = sphericalWaveDisplacement({
       pos: local,
-      time,
+      phase,
       waveAmplitude,
-      waveSpeed,
       noiseScale,
       noiseAmplitude,
       center: vec3(0.0),
@@ -141,10 +125,9 @@ export function buildSphericalWaveCopyKernel({
   storageTexture,
   sourceTextureNode,
   waveAmplitude = uniform(0.1),
-  waveSpeed = uniform(1.0),
   noiseScale = uniform(1.0),
   noiseAmplitude = uniform(0.5),
-  time = uniform(0.0),
+  phase = uniform(0.0),
   intensityScale = uniform(1.0),
 }) {
   return Fn(() => {
@@ -161,9 +144,8 @@ export function buildSphericalWaveCopyKernel({
     const uvw = vec3(fx, fy, fz);
     const displaced = displacedTexCoord({
       texCoord: uvw,
-      time,
+      phase,
       waveAmplitude,
-      waveSpeed,
       noiseScale,
       noiseAmplitude,
     });

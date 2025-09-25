@@ -5,6 +5,7 @@ export {
   displacedTexCoord,
   buildSphericalWaveCopyKernel,
 } from "./waves.js";
+export { knotMorphPosition } from "./knotMorph.js";
 
 // Example TSL function (add your own here)
 export function exampleTSLFunction(input) {

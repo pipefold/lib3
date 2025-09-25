@@ -55,6 +55,7 @@ new THREE.FileLoader()
     // @range: { min: 0.0, max: 2.0, step: 0.01 }
     const intensityScale = uniform(0.25);
     const timeUniform = uniform(0.0);
+    const phaseUniform = uniform(0.0);
 
     // Build compute kernel once, feed uniforms each frame
     const waveKernel = buildSphericalWaveCopyKernel({
@@ -64,11 +65,10 @@ new THREE.FileLoader()
       storageTexture,
       sourceTextureNode: texture3D(sourceTexture, null, 0),
       waveAmplitude,
-      waveSpeed,
       noiseScale,
       noiseAmplitude,
       intensityScale,
-      time: timeUniform,
+      phase: phaseUniform,
     });
 
     const computeNode = waveKernel()
@@ -122,7 +122,10 @@ new THREE.FileLoader()
     scene.add(mesh);
 
     renderer.setAnimationLoop(async () => {
-      timeUniform.value = performance.now() * 0.001;
+      const t = performance.now() * 0.001;
+      timeUniform.value = t;
+      // Integrate phase explicitly to avoid discontinuity when waveSpeed changes
+      phaseUniform.value += waveSpeed.value * (1 / 60);
       await renderer.computeAsync(computeNode);
       renderer.render(scene, camera);
     });

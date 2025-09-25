@@ -1,8 +1,6 @@
-import { uniform, attribute, mix, Fn, positionGeometry } from "three/tsl";
+import { attribute, mix, Fn, positionGeometry, float } from "three/tsl";
 
-export const knotMorphMixFactor = uniform(0);
-
-export const knotMorphPosition = Fn(() => {
+export const knotMorphPosition = Fn(({ mixFactor = float(0) }) => {
   const targetPosition = attribute("targetPosition");
-  return mix(positionGeometry, targetPosition, knotMorphMixFactor);
+  return mix(positionGeometry, targetPosition, mixFactor);
 });
