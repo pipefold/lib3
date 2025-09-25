@@ -44,16 +44,16 @@ new THREE.FileLoader()
     storageTexture.name = "headWave";
 
     // Uniforms for wave compute
-    // @range: { min: 0.0, max: 0.3, step: 0.005 }
-    const waveAmplitude = uniform(0.08);
-    // @range: { min: 0.0, max: 5.0, step: 0.05 }
-    const waveSpeed = uniform(1.2);
-    // @range: { min: 0.1, max: 8.0, step: 0.1 }
-    const noiseScale = uniform(2.0);
-    // @range: { min: 0.0, max: 2.0, step: 0.05 }
+    // @range: { min: 0.0, max: 0.5, step: 0.005 }
+    const waveAmplitude = uniform(0.24);
+    // @range: { min: 0.0, max: 3.0, step: 0.01 }
+    const waveSpeed = uniform(0.55);
+    // @range: { min: 0.1, max: 4.0, step: 0.01 }
+    const noiseScale = uniform(0.64);
+    // @range: { min: 0.0, max: 2.0, step: 0.01 }
     const noiseAmplitude = uniform(0.6);
-    // @range: { min: 0.25, max: 2.0, step: 0.05 }
-    const intensityScale = uniform(1.0);
+    // @range: { min: 0.0, max: 2.0, step: 0.01 }
+    const intensityScale = uniform(0.25);
     const timeUniform = uniform(0.0);
 
     // Build compute kernel once, feed uniforms each frame
@@ -103,10 +103,10 @@ new THREE.FileLoader()
       }
     );
 
-    // @range: { min: 1, max: 15, step: 0.01 }
-    const steps = uniform(1);
+    // @range: { min: 1, max: 24, step: 0.01 }
+    const steps = uniform(12);
     // @range: { min: 0.1, max: 5.0, step: 0.1 }
-    const intensityScaleView = uniform(2.0);
+    const intensityScaleView = uniform(0.2);
 
     const material = new THREE.NodeMaterial();
     material.colorNode = averageIntensityProjection({

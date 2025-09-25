@@ -2,7 +2,7 @@
 import * as THREE from "three/webgpu";
 import { color } from "three/tsl";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { knotMorphPosition, knotMorphMixFactor } from "../../src/index.js"; // Import from lib
+import { knotMorphPosition, knotMorphMixFactor } from "../../src/knotMorph.js"; // Import from dedicated module
 
 // Set up scene, camera, renderer
 const scene = new THREE.Scene();

@@ -1,6 +1,10 @@
 // src/index.js
 import { uniform, attribute, mix, Fn, positionGeometry } from "three/tsl"; // Example import
-export { sphericalWaveDisplacement, displacedTexCoord, buildSphericalWaveCopyKernel } from "./waves.js";
+export {
+  sphericalWaveDisplacement,
+  displacedTexCoord,
+  buildSphericalWaveCopyKernel,
+} from "./waves.js";
 
 // Example TSL function (add your own here)
 export function exampleTSLFunction(input) {
@@ -8,14 +12,8 @@ export function exampleTSLFunction(input) {
   return input.mul(myUniform); // Simple example
 }
 
-// Expose mixFactor as a uniform so it can be updated externally (e.g., per frame)
-export const knotMorphMixFactor = uniform(0);
-
-// Knot morph position (lerp between geometry position and targetPosition attribute)
-export const knotMorphPosition = Fn(() => {
-  const targetPosition = attribute("targetPosition");
-  return mix(positionGeometry, targetPosition, knotMorphMixFactor);
-});
+// Knot morph nodes moved to their own module to avoid auto-including the uniform
+// export * from './knotMorph.js';
 
 // Re-export from other files, e.g.:
 // export * from './myOtherFunction.js';
