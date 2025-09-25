@@ -1,5 +1,6 @@
 // src/index.js
 import { uniform, attribute, mix, Fn, positionGeometry } from "three/tsl"; // Example import
+export { sphericalWaveDisplacement, displacedTexCoord, buildSphericalWaveCopyKernel } from "./waves.js";
 
 // Example TSL function (add your own here)
 export function exampleTSLFunction(input) {
