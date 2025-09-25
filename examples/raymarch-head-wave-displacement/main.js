@@ -123,7 +123,7 @@ new THREE.FileLoader()
 
     renderer.setAnimationLoop(async () => {
       timeUniform.value = performance.now() * 0.001;
-      await renderer.computeAsync(waveKernel().compute(width * height * depth));
+      await renderer.computeAsync(computeNode);
       renderer.render(scene, camera);
     });
   });

@@ -62,8 +62,8 @@ export const sphericalWaveDisplacement = /*@__PURE__*/ Fn(
     // Guard small radius to avoid NaNs
     const safeR = max(r, eps);
 
-    const theta = acos(p.z.div(safeR));
-    const phi = atan(p.y, p.x);
+    // Use normalized direction instead of spherical angles to avoid acos/atan
+    const dir = p.div(safeR);
 
     // Modulate amplitude and speed using simplex noise (higher quality)
     const noisePosAmp = vec3(
@@ -95,11 +95,7 @@ export const sphericalWaveDisplacement = /*@__PURE__*/ Fn(
       .sin()
       .div(max(r, float(0.1)));
 
-    const disp = vec3(
-      localAmplitude.mul(phi.cos()).mul(theta.sin()).mul(wave),
-      localAmplitude.mul(phi.sin()).mul(theta.sin()).mul(wave),
-      localAmplitude.mul(theta.cos()).mul(wave)
-    );
+    const disp = dir.mul(localAmplitude).mul(wave);
 
     // Zero out near the center to avoid exploding displacements
     const mask = r.greaterThan(float(0.01)).select(float(1.0), float(0.0));
