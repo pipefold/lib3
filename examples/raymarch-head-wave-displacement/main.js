@@ -12,7 +12,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   1000
 );
-camera.position.z = 3;
+camera.position.z = 1;
 const renderer = new THREE.WebGPURenderer({
   canvas: document.getElementById("canvas"),
 });
@@ -44,15 +44,15 @@ new THREE.FileLoader()
     storageTexture.name = "headWave";
 
     // Uniforms for wave compute
-    // @range: { min: 0.0, max: 0.5, step: 0.005 }
-    const waveAmplitude = uniform(0.24);
-    // @range: { min: 0.0, max: 3.0, step: 0.01 }
-    const waveSpeed = uniform(0.55);
-    // @range: { min: 0.1, max: 4.0, step: 0.01 }
+    // @range: { min: 0.0, max: 2.0, step: 0.02 }
+    const waveAmplitude = uniform(0.5);
+    // @range: { min: 0.0, max: 5.0, step: 0.05 }
+    const waveSpeed = uniform(2);
+    // @range: { min: 0.1, max: 4.0, step: 0.04 }
     const noiseScale = uniform(0.64);
-    // @range: { min: 0.0, max: 2.0, step: 0.01 }
+    // @range: { min: 0.0, max: 2.0, step: 0.02 }
     const noiseAmplitude = uniform(0.6);
-    // @range: { min: 0.0, max: 2.0, step: 0.01 }
+    // @range: { min: 0.0, max: 2.0, step: 0.02 }
     const intensityScale = uniform(0.25);
     const timeUniform = uniform(0.0);
     const phaseUniform = uniform(0.0);
@@ -103,8 +103,8 @@ new THREE.FileLoader()
       }
     );
 
-    // @range: { min: 1, max: 24, step: 0.01 }
-    const steps = uniform(12);
+    // @range: { min: 1, max: 5, step: 0.05 }
+    const steps = uniform(4);
     // @range: { min: 0.1, max: 5.0, step: 0.1 }
     const intensityScaleView = uniform(0.2);
 
