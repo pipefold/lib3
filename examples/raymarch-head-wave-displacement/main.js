@@ -121,12 +121,25 @@ new THREE.FileLoader()
     mesh.scale.set(1, -1, depth / width);
     scene.add(mesh);
 
+    let lastTime = performance.now() * 0.001;
+    let accum = 0;
+    const computeInterval = 1 / 30; // 30 Hz compute
     renderer.setAnimationLoop(async () => {
-      const t = performance.now() * 0.001;
-      timeUniform.value = t;
-      // Integrate phase explicitly to avoid discontinuity when waveSpeed changes
-      phaseUniform.value += waveSpeed.value * (1 / 60);
-      await renderer.computeAsync(computeNode);
+      const now = performance.now() * 0.001;
+      const dt = Math.min(0.1, now - lastTime); // clamp to avoid spikes
+      lastTime = now;
+      timeUniform.value = now;
+
+      // Integrate phase with real dt
+      phaseUniform.value += waveSpeed.value * dt;
+
+      // Throttle compute to 30Hz
+      accum += dt;
+      if (accum >= computeInterval) {
+        accum -= computeInterval;
+        await renderer.computeAsync(computeNode);
+      }
+
       renderer.render(scene, camera);
     });
   });

@@ -110,8 +110,7 @@ export const displacedTexCoord = /*@__PURE__*/ Fn(
       center: vec3(0.0),
     });
     const samplePos = texCoord.add(offset.mul(scale));
-    const clamped = clamp(samplePos, vec3(0.0), vec3(1.0));
-    return clamped;
+    return samplePos;
   }
 );
 
