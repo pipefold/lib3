@@ -103,8 +103,8 @@ new THREE.FileLoader()
       }
     );
 
-    // @range: { min: 1, max: 150, step: 1 }
-    const steps = uniform(100);
+    // @range: { min: 1, max: 15, step: 0.01 }
+    const steps = uniform(1);
     // @range: { min: 0.1, max: 5.0, step: 0.1 }
     const intensityScaleView = uniform(2.0);
 
