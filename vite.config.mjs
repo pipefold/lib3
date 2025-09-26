@@ -1,6 +1,5 @@
 // vite.config.js (root - for library build + examples serve/build)
 import { defineConfig } from "vite";
-import dts from "vite-plugin-dts";
 import threeUniformGui from "tsl-uniform-ui-vite-plugin";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,25 +29,22 @@ export default defineConfig(({ mode }) => {
     return {
       ...common,
       plugins: [
-        dts({ rollupTypes: true }), // Types only needed for lib
-        ...commonPlugins,
+        // No dts generation for now (JS library). Add back later if needed.
       ],
       build: {
         lib: {
-          entry: "./src/index.js",
-          name: "PipefoldTSLLib",
-          fileName: (format) =>
-            `pipefold-tsl-lib.${format === "es" ? "js" : "cjs"}`,
-          formats: ["es", "cjs"],
+          entry: {
+            index: resolve(__dirname, "src/index.js"),
+            waves: resolve(__dirname, "src/waves.js"),
+            knotMorph: resolve(__dirname, "src/knotMorph.js"),
+          },
+          formats: ["es"],
         },
         rollupOptions: {
-          external: ["three", "three/tsl"], // Don't bundle Three.js
-          output: {
-            globals: {
-              three: "THREE",
-            },
-          },
+          external: ["three", "three/tsl"],
         },
+        sourcemap: true,
+        emptyOutDir: true,
       },
     };
   } else {

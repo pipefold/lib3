@@ -1,19 +1,47 @@
 {
   "name": "@pipefold/tsl-lib",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "version": "0.1.0",
+  "description": "Composable TSL nodes and utilities for Three.js/WebGPU (waves, morphs).",
+  "type": "module",
+  "sideEffects": false,
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    },
+    "./waves": {
+      "import": "./dist/waves.js"
+    },
+    "./knotMorph": {
+      "import": "./dist/knotMorph.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "next"
+  },
   "scripts": {
     "build:lib": "vite build --mode lib",
     "build:examples": "vite build",
     "build": "pnpm build:lib && pnpm build:examples",
     "dev": "vite",
     "preview": "vite preview",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "prepublishOnly": "pnpm build",
+    "publish:dry": "npm publish --dry-run",
+    "test": "echo \"no tests\" && exit 0"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pipefold/tsl-lib.git"
+  },
+  "homepage": "https://github.com/pipefold/tsl-lib#readme",
+  "bugs": {
+    "url": "https://github.com/pipefold/tsl-lib/issues"
+  },
   "packageManager": "pnpm@10.15.0",
   "devDependencies": {
     "@tweakpane/core": "^2.0.5",
@@ -28,5 +56,11 @@
   },
   "dependencies": {
     "three": "^0.180.0"
-  }
+  },
+  "peerDependencies": {
+    "three": ">=0.180.0"
+  },
+  "files": [
+    "dist"
+  ]
 }
