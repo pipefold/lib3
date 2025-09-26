@@ -2,7 +2,7 @@
 import * as THREE from "three/webgpu";
 import { color } from "three/tsl";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { knotMorphPosition, knotMorphMixFactor } from "../../src/index.js"; // Import from lib
+import { knotMorphPosition } from "../../src/knotMorph.js"; // Import from dedicated module
 
 // Set up scene, camera, renderer
 const scene = new THREE.Scene();
@@ -53,7 +53,7 @@ function animate() {
 
   // Ping-pong mix factor for looping morph (0 to 1 and back)
   const mixFactor = Math.abs(Math.sin(time * 0.5));
-  knotMorphMixFactor.value = mixFactor;
+  material.positionNode = knotMorphPosition({ mixFactor });
 
   // Dynamic rotation (ported from original)
   const quaternion = new THREE.Quaternion();
