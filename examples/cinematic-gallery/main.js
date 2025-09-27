@@ -263,10 +263,16 @@ new THREE.FileLoader()
     }
 
     let camAnim = null;
-    function animateCameraTo({ position, target }, duration = 0.8) {
+    // Easing function for camera transitions (snappy, natural feel)
+    function easeOutCubic(x) {
+      return 1 - Math.pow(1 - x, 3);
+    }
+
+    function animateCameraTo({ position, target }, duration = 0.5) {
       camAnim = {
         t: 0,
         duration,
+        ease: easeOutCubic,
         fromPos: parentCamera.position.clone(),
         toPos: position.clone(),
         fromTarget: controls.target.clone(),
@@ -401,8 +407,9 @@ new THREE.FileLoader()
       if (camAnim) {
         camAnim.t += dt / camAnim.duration;
         const a = Math.min(1, camAnim.t);
-        parentCamera.position.lerpVectors(camAnim.fromPos, camAnim.toPos, a);
-        controls.target.lerpVectors(camAnim.fromTarget, camAnim.toTarget, a);
+        const e = camAnim.ease ? camAnim.ease(a) : a;
+        parentCamera.position.lerpVectors(camAnim.fromPos, camAnim.toPos, e);
+        controls.target.lerpVectors(camAnim.fromTarget, camAnim.toTarget, e);
         if (a >= 1) camAnim = null;
       }
 
