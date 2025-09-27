@@ -1,6 +1,6 @@
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { unzipSync } from "three/addons/libs/fflate.module.js";
-import { texture3D, uniform, pass, screenUV } from "three/tsl";
+import { texture3D, uniform, pass, screenUV, uv } from "three/tsl";
 import {
   buildSphericalWaveCopyKernel,
   averageIntensityProjection,
@@ -121,9 +121,48 @@ new THREE.FileLoader()
     screenMat.colorNode = pass(childScene, childCamera).context({
       getUV: () => screenUV,
     });
+    // Soft circular portal mask for a more "portal" vibe
+    screenMat.opacityNode = uv().distance(0.5).remapClamp(0.33, 0.5).oneMinus();
+    screenMat.transparent = true;
     const screen = new THREE.Mesh(screenGeo, screenMat);
+    screen.material.side = THREE.DoubleSide;
+    screen.renderOrder = 1;
     screen.position.set(0, 1.0, 0);
     parentScene.add(screen);
+
+    // Simple 3D frame around the portal
+    const frameDepth = 0.05;
+    const frameThickness = 0.06;
+    const frameMat = new THREE.MeshStandardMaterial({
+      color: 0x222222,
+      roughness: 1,
+    });
+    const frameGroup = new THREE.Group();
+    const horizLen = screenWidth + frameThickness * 2;
+    const vertLen = screenHeight + frameThickness * 2;
+    const top = new THREE.Mesh(
+      new THREE.BoxGeometry(horizLen, frameThickness, frameDepth),
+      frameMat
+    );
+    const bot = new THREE.Mesh(
+      new THREE.BoxGeometry(horizLen, frameThickness, frameDepth),
+      frameMat
+    );
+    const left = new THREE.Mesh(
+      new THREE.BoxGeometry(frameThickness, screenHeight, frameDepth),
+      frameMat
+    );
+    const right = new THREE.Mesh(
+      new THREE.BoxGeometry(frameThickness, screenHeight, frameDepth),
+      frameMat
+    );
+    top.position.set(0, screenHeight / 2 + frameThickness / 2, frameDepth / 2);
+    bot.position.set(0, -screenHeight / 2 - frameThickness / 2, frameDepth / 2);
+    left.position.set(-screenWidth / 2 - frameThickness / 2, 0, frameDepth / 2);
+    right.position.set(screenWidth / 2 + frameThickness / 2, 0, frameDepth / 2);
+    frameGroup.add(top, bot, left, right);
+    frameGroup.position.copy(screen.position);
+    parentScene.add(frameGroup);
 
     // Simple cinema-like stand for context
     const floor = new THREE.Mesh(
