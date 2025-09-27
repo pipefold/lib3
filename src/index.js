@@ -6,6 +6,7 @@ export {
   buildSphericalWaveCopyKernel,
 } from "./waves.js";
 export { knotMorphPosition } from "./knotMorph.js";
+export { adaptiveRaymarch, averageIntensityProjection } from "./raymarch.js";
 
 // Example TSL function (add your own here)
 export function exampleTSLFunction(input) {

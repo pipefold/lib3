@@ -16,6 +16,7 @@ import {
   int,
   If,
 } from "three/tsl";
+import { RaymarchingBox } from "three/addons/tsl/utils/Raymarching.js";
 
 const hitBox = /*@__PURE__*/ Fn(({ orig, dir }) => {
   const box_min = vec3(-0.5);
@@ -78,3 +79,28 @@ export const adaptiveRaymarch = (
 
   return { positionRay, t, bounds, hit };
 };
+
+// Average Intensity Projection over a unit box using fixed-step raymarch
+export const averageIntensityProjection = /*@__PURE__*/ Fn(
+  ({ texture, steps, intensityScale = float(1.0) }) => {
+    const finalColor = vec4(0).toVar();
+    const intensitySum = float(0).toVar();
+    const sampleCount = float(0).toVar();
+
+    RaymarchingBox(steps, ({ positionRay }) => {
+      const samplePos = positionRay.add(0.5);
+      const mapValue = texture.sample(samplePos).r;
+
+      intensitySum.addAssign(mapValue);
+      sampleCount.addAssign(1);
+    });
+
+    const averageIntensity = intensitySum.div(sampleCount);
+    const scaledIntensity = averageIntensity.mul(intensityScale);
+
+    finalColor.rgb.assign(vec3(scaledIntensity));
+    finalColor.a.assign(1);
+
+    return finalColor;
+  }
+);

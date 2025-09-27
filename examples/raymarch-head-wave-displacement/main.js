@@ -1,8 +1,10 @@
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { unzipSync } from "three/addons/libs/fflate.module.js";
-import { RaymarchingBox } from "three/addons/tsl/utils/Raymarching.js";
-import { Fn, texture3D, uniform, vec3, vec4, float } from "three/tsl";
-import { buildSphericalWaveCopyKernel } from "../../src/index.js";
+import { texture3D, uniform } from "three/tsl";
+import {
+  buildSphericalWaveCopyKernel,
+  averageIntensityProjection,
+} from "../../src/index.js";
 import * as THREE from "three/webgpu";
 
 const scene = new THREE.Scene();
@@ -77,31 +79,6 @@ new THREE.FileLoader()
 
     await renderer.init();
     await renderer.computeAsync(computeNode);
-
-    // Shader for Average Intensity Projection (AIP)
-    const averageIntensityProjection = Fn(
-      ({ texture, steps, intensityScale = float(1.0) }) => {
-        const finalColor = vec4(0).toVar();
-        const intensitySum = float(0).toVar();
-        const sampleCount = float(0).toVar();
-
-        RaymarchingBox(steps, ({ positionRay }) => {
-          const samplePos = positionRay.add(0.5);
-          const mapValue = texture.sample(samplePos).r;
-
-          intensitySum.addAssign(mapValue);
-          sampleCount.addAssign(1);
-        });
-
-        const averageIntensity = intensitySum.div(sampleCount);
-        const scaledIntensity = averageIntensity.mul(intensityScale);
-
-        finalColor.rgb.assign(vec3(scaledIntensity));
-        finalColor.a.assign(1);
-
-        return finalColor;
-      }
-    );
 
     // @range: { min: 1, max: 5, step: 0.05 }
     const steps = uniform(4);
