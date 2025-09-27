@@ -1,6 +1,6 @@
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { unzipSync } from "three/addons/libs/fflate.module.js";
-import { texture3D, uniform, pass, uv, color } from "three/tsl";
+import { texture3D, uniform, pass, uv, color, screenUV } from "three/tsl";
 import { knotMorphPosition } from "../../src/knotMorph.js";
 import {
   buildSphericalWaveCopyKernel,
@@ -123,8 +123,10 @@ new THREE.FileLoader()
     const screenHeight = 0.9;
     const screenGeo = new THREE.PlaneGeometry(screenWidth, screenHeight);
     const screenMat = new THREE.MeshBasicNodeMaterial();
-    // Use mesh UV mapping so the content is view-independent
-    screenMat.colorNode = pass(childScene, childCamera).getTextureNode();
+    // Portal/window mapping: sample using screenUV so it feels like a window
+    screenMat.colorNode = pass(childScene, childCamera).context({
+      getUV: () => screenUV,
+    });
     // Soft circular portal mask for a more "portal" vibe
     screenMat.opacityNode = uv().distance(0.5).remapClamp(0.33, 0.5).oneMinus();
     screenMat.transparent = true;
@@ -222,6 +224,86 @@ new THREE.FileLoader()
     frameGroup2.position.copy(screen2.position);
     parentScene.add(frameGroup2);
 
+    // Camera state management (default, fit to screen A, fit to screen B)
+    const defaultCamPos = parentCamera.position.clone();
+    const defaultTarget = controls.target.clone();
+
+    function fitToPlane(mesh, margin = 1.2) {
+      const params = mesh.geometry.parameters || { width: 1, height: 1 };
+      const rectWidth = (params.width || 1) * (mesh.scale?.x || 1) * margin;
+      const rectHeight = (params.height || 1) * (mesh.scale?.y || 1) * margin;
+
+      const center = new THREE.Vector3();
+      mesh.getWorldPosition(center);
+
+      const normal = new THREE.Vector3(0, 0, 1);
+      const q = new THREE.Quaternion();
+      mesh.getWorldQuaternion(q);
+      normal.applyQuaternion(q);
+
+      const vFov = (parentCamera.fov * Math.PI) / 180;
+      const fovH = 2 * Math.atan(Math.tan(vFov / 2) * parentCamera.aspect);
+      const distH = rectHeight / 2 / Math.tan(vFov / 2);
+      const distW = rectWidth / 2 / Math.tan(fovH / 2);
+      const distance = Math.max(distH, distW);
+
+      // Place the camera on the same side of the plane as it currently is to avoid flips
+      const toCamera = new THREE.Vector3().subVectors(
+        parentCamera.position,
+        center
+      );
+      const side = Math.sign(toCamera.dot(normal)) || 1; // +1 if in front (along normal), -1 if behind
+      const position = new THREE.Vector3()
+        .copy(center)
+        .addScaledVector(normal, side * distance);
+      const target = center.clone();
+      return { position, target };
+    }
+
+    let camAnim = null;
+    function animateCameraTo({ position, target }, duration = 0.8) {
+      camAnim = {
+        t: 0,
+        duration,
+        fromPos: parentCamera.position.clone(),
+        toPos: position.clone(),
+        fromTarget: controls.target.clone(),
+        toTarget: target.clone(),
+      };
+    }
+
+    function setCameraState(index) {
+      switch (index) {
+        case 1: {
+          const { position, target } = fitToPlane(screen, 1.1);
+          animateCameraTo({ position, target });
+          break;
+        }
+        case 2: {
+          const { position, target } = fitToPlane(screen2, 1.1);
+          animateCameraTo({ position, target });
+          break;
+        }
+        default: {
+          animateCameraTo({ position: defaultCamPos, target: defaultTarget });
+        }
+      }
+    }
+
+    let cameraStateIndex = 0; // 0 default, 1 screen A, 2 screen B
+    function cycleCameraState() {
+      cameraStateIndex = (cameraStateIndex + 1) % 3;
+      setCameraState(cameraStateIndex);
+    }
+
+    // Input binding: spacebar to cycle
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        cycleCameraState();
+      }
+    });
+
     // Child B: Knot morph content
     const startGeo = new THREE.TorusKnotGeometry(1, 0.4, 128, 32, 2, 3);
     const targetGeo = new THREE.TorusKnotGeometry(1, 0.4, 128, 32, 3, 5);
@@ -301,6 +383,15 @@ new THREE.FileLoader()
       const mixFactor = Math.abs(Math.sin(now * 0.5));
       knotMat.positionNode = knotMorphPosition({ mixFactor });
       knotMesh.rotation.y += 0.01;
+
+      // Camera animation LERP (position and target)
+      if (camAnim) {
+        camAnim.t += dt / camAnim.duration;
+        const a = Math.min(1, camAnim.t);
+        parentCamera.position.lerpVectors(camAnim.fromPos, camAnim.toPos, a);
+        controls.target.lerpVectors(camAnim.fromTarget, camAnim.toTarget, a);
+        if (a >= 1) camAnim = null;
+      }
 
       // Render parent scene with user controls
       controls.update();
