@@ -1,6 +1,6 @@
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { unzipSync } from "three/addons/libs/fflate.module.js";
-import { texture3D, uniform, pass, uv, color, screenUV } from "three/tsl";
+import { texture3D, uniform, pass, color, screenUV } from "three/tsl";
 import { knotMorphPosition } from "../../src/knotMorph.js";
 import {
   buildSphericalWaveCopyKernel,
@@ -9,7 +9,10 @@ import {
 import * as THREE from "three/webgpu";
 
 // Choose cinematic aspect based on viewport orientation: 16:9 (landscape) or 9:16 (portrait)
-const CHILD_ASPECT = window.innerWidth >= window.innerHeight ? 16 / 9 : 9 / 16;
+function getCinematicAspect(w, h) {
+  return w >= h ? 16 / 9 : 9 / 16;
+}
+let childAspect = getCinematicAspect(window.innerWidth, window.innerHeight);
 
 // Parent (main) scene and camera
 const parentScene = new THREE.Scene();
@@ -23,13 +26,13 @@ parentCamera.position.set(0, 1.25, 2.5);
 
 // Child A (offscreen) scene and camera - Raymarch Head
 const childScene = new THREE.Scene();
-const childCamera = new THREE.PerspectiveCamera(60, CHILD_ASPECT, 0.05, 1000);
+const childCamera = new THREE.PerspectiveCamera(60, childAspect, 0.05, 1000);
 childCamera.position.set(0.0, 0.0, 1.2);
 childCamera.updateProjectionMatrix();
 
 // Child B (offscreen) scene and camera - Knot Morph
 const childScene2 = new THREE.Scene();
-const childCamera2 = new THREE.PerspectiveCamera(60, CHILD_ASPECT, 0.05, 1000);
+const childCamera2 = new THREE.PerspectiveCamera(60, childAspect, 0.05, 1000);
 childCamera2.position.set(0, 0, 5);
 childCamera2.updateProjectionMatrix();
 
@@ -44,6 +47,66 @@ renderer.setClearColor(0x000000);
 const controls = new OrbitControls(parentCamera, renderer.domElement);
 controls.target.set(0, 1.0, 0);
 controls.update();
+
+// Helpers
+function computeScreenDimensions(aspect, longSide) {
+  const width = aspect >= 1 ? longSide : longSide * aspect;
+  const height = aspect >= 1 ? longSide / aspect : longSide;
+  return { width, height };
+}
+
+function createPortalPlane({
+  width,
+  height,
+  scene,
+  camera,
+  uvMode = "screen",
+}) {
+  const geo = new THREE.PlaneGeometry(width, height);
+  const mat = new THREE.MeshBasicNodeMaterial();
+  mat.colorNode =
+    uvMode === "screen"
+      ? pass(scene, camera).context({ getUV: () => screenUV })
+      : pass(scene, camera).getTextureNode();
+  mat.transparent = false;
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.material.side = THREE.DoubleSide;
+  mesh.renderOrder = 1;
+  return mesh;
+}
+
+function createFrame({
+  width,
+  height,
+  thickness = 0.06,
+  depth = 0.05,
+  material,
+}) {
+  const group = new THREE.Group();
+  const horizLen = width + thickness * 2;
+  const top = new THREE.Mesh(
+    new THREE.BoxGeometry(horizLen, thickness, depth),
+    material
+  );
+  const bot = new THREE.Mesh(
+    new THREE.BoxGeometry(horizLen, thickness, depth),
+    material
+  );
+  const left = new THREE.Mesh(
+    new THREE.BoxGeometry(thickness, height, depth),
+    material
+  );
+  const right = new THREE.Mesh(
+    new THREE.BoxGeometry(thickness, height, depth),
+    material
+  );
+  top.position.set(0, height / 2 + thickness / 2, depth / 2);
+  bot.position.set(0, -height / 2 - thickness / 2, depth / 2);
+  left.position.set(-width / 2 - thickness / 2, 0, depth / 2);
+  right.position.set(width / 2 + thickness / 2, 0, depth / 2);
+  group.add(top, bot, left, right);
+  return group;
+}
 
 // Load volumetric dataset and set up compute + child scene volume render
 new THREE.FileLoader()
@@ -75,7 +138,6 @@ new THREE.FileLoader()
     const noiseScale = uniform(0.64);
     const noiseAmplitude = uniform(0.6);
     const intensityScale = uniform(0.25);
-    const timeUniform = uniform(0.0);
     const phaseUniform = uniform(0.0);
 
     // Build compute kernel once, feed uniforms each frame
@@ -119,106 +181,54 @@ new THREE.FileLoader()
     childMesh.scale.set(1, -1, depth / width);
     childScene.add(childMesh);
 
-    // Screen A in parent scene showing the head via pass(...)
-    // Match plane aspect to chosen cinematic aspect (landscape 16:9 or portrait 9:16)
+    // Screen and frame creation via helpers
     const longSide = 1.6;
-    const screenWidth = CHILD_ASPECT >= 1 ? longSide : longSide * CHILD_ASPECT;
-    const screenHeight = CHILD_ASPECT >= 1 ? longSide / CHILD_ASPECT : longSide;
-    const screenGeo = new THREE.PlaneGeometry(screenWidth, screenHeight);
-    const screenMat = new THREE.MeshBasicNodeMaterial();
-    // Portal/window mapping: sample using screenUV so it feels like a window
-    screenMat.colorNode = pass(childScene, childCamera).context({
-      getUV: () => screenUV,
+    const { width: initialWidth, height: initialHeight } =
+      computeScreenDimensions(childAspect, longSide);
+
+    const screen = createPortalPlane({
+      width: initialWidth,
+      height: initialHeight,
+      scene: childScene,
+      camera: childCamera,
+      uvMode: "screen",
     });
-    // Solid material (no vignette mask)
-    screenMat.transparent = false;
-    const screen = new THREE.Mesh(screenGeo, screenMat);
-    screen.material.side = THREE.DoubleSide;
-    screen.renderOrder = 1;
     screen.position.set(0, 1.0, 0);
     parentScene.add(screen);
 
-    // Simple 3D frame around portal A
     const frameDepth = 0.05;
     const frameThickness = 0.06;
     const frameMat = new THREE.MeshStandardMaterial({
       color: 0x222222,
       roughness: 1,
     });
-    const frameGroup = new THREE.Group();
-    const horizLen = screenWidth + frameThickness * 2;
-    const vertLen = screenHeight + frameThickness * 2;
-    const top = new THREE.Mesh(
-      new THREE.BoxGeometry(horizLen, frameThickness, frameDepth),
-      frameMat
-    );
-    const bot = new THREE.Mesh(
-      new THREE.BoxGeometry(horizLen, frameThickness, frameDepth),
-      frameMat
-    );
-    const left = new THREE.Mesh(
-      new THREE.BoxGeometry(frameThickness, screenHeight, frameDepth),
-      frameMat
-    );
-    const right = new THREE.Mesh(
-      new THREE.BoxGeometry(frameThickness, screenHeight, frameDepth),
-      frameMat
-    );
-    top.position.set(0, screenHeight / 2 + frameThickness / 2, frameDepth / 2);
-    bot.position.set(0, -screenHeight / 2 - frameThickness / 2, frameDepth / 2);
-    left.position.set(-screenWidth / 2 - frameThickness / 2, 0, frameDepth / 2);
-    right.position.set(screenWidth / 2 + frameThickness / 2, 0, frameDepth / 2);
-    frameGroup.add(top, bot, left, right);
+    let frameGroup = createFrame({
+      width: initialWidth,
+      height: initialHeight,
+      thickness: frameThickness,
+      depth: frameDepth,
+      material: frameMat,
+    });
     frameGroup.position.copy(screen.position);
     parentScene.add(frameGroup);
 
-    // Screen B (knot morph) on the right
-    const screen2Geo = new THREE.PlaneGeometry(screenWidth, screenHeight);
-    const screen2Mat = new THREE.MeshBasicNodeMaterial();
-    // Use mesh UV mapping so the content is view-independent
-    screen2Mat.colorNode = pass(childScene2, childCamera2).getTextureNode();
-    screen2Mat.transparent = false;
-    const screen2 = new THREE.Mesh(screen2Geo, screen2Mat);
-    screen2.material.side = THREE.DoubleSide;
-    screen2.renderOrder = 1;
+    const screen2 = createPortalPlane({
+      width: initialWidth,
+      height: initialHeight,
+      scene: childScene2,
+      camera: childCamera2,
+      uvMode: "mesh",
+    });
     screen2.position.set(2.0, 1.0, 0);
     parentScene.add(screen2);
 
-    // Frame around portal B
-    const frameGroup2 = new THREE.Group();
-    const top2 = new THREE.Mesh(
-      new THREE.BoxGeometry(horizLen, frameThickness, frameDepth),
-      frameMat
-    );
-    const bot2 = new THREE.Mesh(
-      new THREE.BoxGeometry(horizLen, frameThickness, frameDepth),
-      frameMat
-    );
-    const left2 = new THREE.Mesh(
-      new THREE.BoxGeometry(frameThickness, screenHeight, frameDepth),
-      frameMat
-    );
-    const right2 = new THREE.Mesh(
-      new THREE.BoxGeometry(frameThickness, screenHeight, frameDepth),
-      frameMat
-    );
-    top2.position.set(0, screenHeight / 2 + frameThickness / 2, frameDepth / 2);
-    bot2.position.set(
-      0,
-      -screenHeight / 2 - frameThickness / 2,
-      frameDepth / 2
-    );
-    left2.position.set(
-      -screenWidth / 2 - frameThickness / 2,
-      0,
-      frameDepth / 2
-    );
-    right2.position.set(
-      screenWidth / 2 + frameThickness / 2,
-      0,
-      frameDepth / 2
-    );
-    frameGroup2.add(top2, bot2, left2, right2);
+    let frameGroup2 = createFrame({
+      width: initialWidth,
+      height: initialHeight,
+      thickness: frameThickness,
+      depth: frameDepth,
+      material: frameMat,
+    });
     frameGroup2.position.copy(screen2.position);
     parentScene.add(frameGroup2);
 
@@ -280,28 +290,15 @@ new THREE.FileLoader()
       };
     }
 
+    const camStates = [
+      () => ({ position: defaultCamPos, target: defaultTarget }),
+      () => fitToPlane(screen, { cover: true, overscan: 1.06 }),
+      () => fitToPlane(screen2, { cover: true, overscan: 1.06 }),
+    ];
+
     function setCameraState(index) {
-      switch (index) {
-        case 1: {
-          const { position, target } = fitToPlane(screen, {
-            cover: true,
-            overscan: 1.06,
-          });
-          animateCameraTo({ position, target });
-          break;
-        }
-        case 2: {
-          const { position, target } = fitToPlane(screen2, {
-            cover: true,
-            overscan: 1.06,
-          });
-          animateCameraTo({ position, target });
-          break;
-        }
-        default: {
-          animateCameraTo({ position: defaultCamPos, target: defaultTarget });
-        }
-      }
+      const state = camStates[index % camStates.length]();
+      animateCameraTo(state);
     }
 
     let cameraStateIndex = 0; // 0 default, 1 screen A, 2 screen B
@@ -342,10 +339,10 @@ new THREE.FileLoader()
 
     // Fit knot inside childCamera2 frustum and center it
     startGeo.computeBoundingSphere();
-    const radius = startGeo.boundingSphere?.radius || 1.5;
+    const knotRadius = startGeo.boundingSphere?.radius || 1.5;
     const vFov = (childCamera2.fov * Math.PI) / 180;
-    const fitHeightDistance = radius / Math.tan(vFov / 2);
-    const fitWidthDistance = (radius * CHILD_ASPECT) / Math.tan(vFov / 2);
+    const fitHeightDistance = knotRadius / Math.tan(vFov / 2);
+    const fitWidthDistance = (knotRadius * childAspect) / Math.tan(vFov / 2);
     const distance = Math.max(fitHeightDistance, fitWidthDistance) * 1.2; // margin
     childCamera2.position.set(0, 0, distance);
     childCamera2.lookAt(0, 0, 0);
@@ -368,28 +365,31 @@ new THREE.FileLoader()
     let lastTime = performance.now() * 0.001;
     let accum = 0;
     const computeInterval = 1 / 30; // 30 Hz compute
+    let computeInFlight = false;
 
     renderer.setAnimationLoop(async () => {
       const now = performance.now() * 0.001;
       const dt = Math.min(0.1, now - lastTime);
       lastTime = now;
-      timeUniform.value = now;
 
       // Integrate phase with real dt
       phaseUniform.value += waveSpeed.value * dt;
 
       // Throttle compute to ~30Hz
       accum += dt;
-      if (accum >= computeInterval) {
+      if (accum >= computeInterval && !computeInFlight) {
         accum -= computeInterval;
-        await renderer.computeAsync(computeNode);
+        computeInFlight = true;
+        await renderer.computeAsync(computeNode).finally(() => {
+          computeInFlight = false;
+        });
       }
 
       // Spiral motion for child camera
       const radius = 1.25;
       const angularSpeed = 0.4; // rad/s
       const elevationSpeed = 0.15; // cycles/s
-      const angle = now * angularSpeed * Math.PI * 2.0 * 0.15915494309189535; // keep scale modest
+      const angle = now * angularSpeed;
       const y = Math.sin(now * elevationSpeed) * 0.2;
       childCamera.position.set(
         Math.cos(angle) * radius,
@@ -418,15 +418,61 @@ new THREE.FileLoader()
       renderer.render(parentScene, parentCamera);
     });
 
-    // Resize handling for both cameras
+    // Update layout for aspect/orientation changes
+    function updateLayout() {
+      childAspect = getCinematicAspect(window.innerWidth, window.innerHeight);
+
+      const dims = computeScreenDimensions(childAspect, longSide);
+      const newWidth = dims.width;
+      const newHeight = dims.height;
+
+      // Update child cameras
+      childCamera.aspect = childAspect;
+      childCamera.updateProjectionMatrix();
+      childCamera2.aspect = childAspect;
+      childCamera2.updateProjectionMatrix();
+
+      // Update portal screens by scaling relative to initial geometry size
+      screen.scale.set(newWidth / initialWidth, newHeight / initialHeight, 1);
+      screen2.scale.set(newWidth / initialWidth, newHeight / initialHeight, 1);
+
+      // Rebuild frames to keep thickness/depth consistent
+      parentScene.remove(frameGroup);
+      frameGroup = createFrame({
+        width: newWidth,
+        height: newHeight,
+        thickness: frameThickness,
+        depth: frameDepth,
+        material: frameMat,
+      });
+      frameGroup.position.copy(screen.position);
+      parentScene.add(frameGroup);
+
+      parentScene.remove(frameGroup2);
+      frameGroup2 = createFrame({
+        width: newWidth,
+        height: newHeight,
+        thickness: frameThickness,
+        depth: frameDepth,
+        material: frameMat,
+      });
+      frameGroup2.position.copy(screen2.position);
+      parentScene.add(frameGroup2);
+
+      // Re-fit knot camera distance for new aspect
+      const vFov = (childCamera2.fov * Math.PI) / 180;
+      const fitH = knotRadius / Math.tan(vFov / 2);
+      const fitW = (knotRadius * childAspect) / Math.tan(vFov / 2);
+      const dist = Math.max(fitH, fitW) * 1.2;
+      childCamera2.position.set(0, 0, dist);
+      childCamera2.lookAt(0, 0, 0);
+    }
+
+    // Resize handling for renderer and parent camera, then update layout
     window.addEventListener("resize", () => {
       renderer.setSize(window.innerWidth, window.innerHeight);
       parentCamera.aspect = window.innerWidth / window.innerHeight;
       parentCamera.updateProjectionMatrix();
-      // Keep child cameras at the cinematic aspect (landscape 16:9 or portrait 9:16)
-      childCamera.aspect = CHILD_ASPECT;
-      childCamera.updateProjectionMatrix();
-      childCamera2.aspect = CHILD_ASPECT;
-      childCamera2.updateProjectionMatrix();
+      updateLayout();
     });
   });
