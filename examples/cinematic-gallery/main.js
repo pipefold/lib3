@@ -8,7 +8,8 @@ import {
 } from "../../src/index.js";
 import * as THREE from "three/webgpu";
 
-const CHILD_ASPECT = 16 / 9; // match the 16:9 portal screens
+// Choose cinematic aspect based on viewport orientation: 16:9 (landscape) or 9:16 (portrait)
+const CHILD_ASPECT = window.innerWidth >= window.innerHeight ? 16 / 9 : 9 / 16;
 
 // Parent (main) scene and camera
 const parentScene = new THREE.Scene();
@@ -118,18 +119,19 @@ new THREE.FileLoader()
     childMesh.scale.set(1, -1, depth / width);
     childScene.add(childMesh);
 
-    // Screen A in parent scene (16:9 plane) showing the head via pass(...)
-    const screenWidth = 1.6;
-    const screenHeight = 0.9;
+    // Screen A in parent scene showing the head via pass(...)
+    // Match plane aspect to chosen cinematic aspect (landscape 16:9 or portrait 9:16)
+    const longSide = 1.6;
+    const screenWidth = CHILD_ASPECT >= 1 ? longSide : longSide * CHILD_ASPECT;
+    const screenHeight = CHILD_ASPECT >= 1 ? longSide / CHILD_ASPECT : longSide;
     const screenGeo = new THREE.PlaneGeometry(screenWidth, screenHeight);
     const screenMat = new THREE.MeshBasicNodeMaterial();
     // Portal/window mapping: sample using screenUV so it feels like a window
     screenMat.colorNode = pass(childScene, childCamera).context({
       getUV: () => screenUV,
     });
-    // Soft circular portal mask for a more "portal" vibe
-    screenMat.opacityNode = uv().distance(0.5).remapClamp(0.33, 0.5).oneMinus();
-    screenMat.transparent = true;
+    // Solid material (no vignette mask)
+    screenMat.transparent = false;
     const screen = new THREE.Mesh(screenGeo, screenMat);
     screen.material.side = THREE.DoubleSide;
     screen.renderOrder = 1;
@@ -175,11 +177,7 @@ new THREE.FileLoader()
     const screen2Mat = new THREE.MeshBasicNodeMaterial();
     // Use mesh UV mapping so the content is view-independent
     screen2Mat.colorNode = pass(childScene2, childCamera2).getTextureNode();
-    screen2Mat.opacityNode = uv()
-      .distance(0.5)
-      .remapClamp(0.33, 0.5)
-      .oneMinus();
-    screen2Mat.transparent = true;
+    screen2Mat.transparent = false;
     const screen2 = new THREE.Mesh(screen2Geo, screen2Mat);
     screen2.material.side = THREE.DoubleSide;
     screen2.renderOrder = 1;
@@ -228,10 +226,11 @@ new THREE.FileLoader()
     const defaultCamPos = parentCamera.position.clone();
     const defaultTarget = controls.target.clone();
 
-    function fitToPlane(mesh, margin = 1.2) {
+    function fitToPlane(mesh, options = {}) {
+      const { cover = false, overscan = 1.02 } = options; // cover=true = fill like CSS background-size: cover
       const params = mesh.geometry.parameters || { width: 1, height: 1 };
-      const rectWidth = (params.width || 1) * (mesh.scale?.x || 1) * margin;
-      const rectHeight = (params.height || 1) * (mesh.scale?.y || 1) * margin;
+      const rectWidth = (params.width || 1) * (mesh.scale?.x || 1);
+      const rectHeight = (params.height || 1) * (mesh.scale?.y || 1);
 
       const center = new THREE.Vector3();
       mesh.getWorldPosition(center);
@@ -245,7 +244,10 @@ new THREE.FileLoader()
       const fovH = 2 * Math.atan(Math.tan(vFov / 2) * parentCamera.aspect);
       const distH = rectHeight / 2 / Math.tan(vFov / 2);
       const distW = rectWidth / 2 / Math.tan(fovH / 2);
-      const distance = Math.max(distH, distW);
+      // contain (fit): max; cover (fill): min
+      let distance = cover ? Math.min(distH, distW) : Math.max(distH, distW);
+      // For cover, move slightly closer to ensure no border shows; for contain, a tiny margin could be applied if desired
+      distance = cover ? distance / overscan : distance;
 
       // Place the camera on the same side of the plane as it currently is to avoid flips
       const toCamera = new THREE.Vector3().subVectors(
@@ -275,12 +277,18 @@ new THREE.FileLoader()
     function setCameraState(index) {
       switch (index) {
         case 1: {
-          const { position, target } = fitToPlane(screen, 1.1);
+          const { position, target } = fitToPlane(screen, {
+            cover: true,
+            overscan: 1.06,
+          });
           animateCameraTo({ position, target });
           break;
         }
         case 2: {
-          const { position, target } = fitToPlane(screen2, 1.1);
+          const { position, target } = fitToPlane(screen2, {
+            cover: true,
+            overscan: 1.06,
+          });
           animateCameraTo({ position, target });
           break;
         }
@@ -295,12 +303,17 @@ new THREE.FileLoader()
       cameraStateIndex = (cameraStateIndex + 1) % 3;
       setCameraState(cameraStateIndex);
     }
+    function cycleCameraStateBackward() {
+      cameraStateIndex = (cameraStateIndex + 3 - 1) % 3;
+      setCameraState(cameraStateIndex);
+    }
 
-    // Input binding: spacebar to cycle
+    // Input binding: spacebar to cycle; shift+space to cycle backward
     window.addEventListener("keydown", (e) => {
       if (e.code === "Space") {
         e.preventDefault();
-        cycleCameraState();
+        if (e.shiftKey) cycleCameraStateBackward();
+        else cycleCameraState();
       }
     });
 
@@ -403,6 +416,7 @@ new THREE.FileLoader()
       renderer.setSize(window.innerWidth, window.innerHeight);
       parentCamera.aspect = window.innerWidth / window.innerHeight;
       parentCamera.updateProjectionMatrix();
+      // Keep child cameras at the cinematic aspect (landscape 16:9 or portrait 9:16)
       childCamera.aspect = CHILD_ASPECT;
       childCamera.updateProjectionMatrix();
       childCamera2.aspect = CHILD_ASPECT;
