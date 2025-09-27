@@ -1,11 +1,14 @@
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { unzipSync } from "three/addons/libs/fflate.module.js";
-import { texture3D, uniform, pass, screenUV, uv } from "three/tsl";
+import { texture3D, uniform, pass, uv, color } from "three/tsl";
+import { knotMorphPosition } from "../../src/knotMorph.js";
 import {
   buildSphericalWaveCopyKernel,
   averageIntensityProjection,
 } from "../../src/index.js";
 import * as THREE from "three/webgpu";
+
+const CHILD_ASPECT = 16 / 9; // match the 16:9 portal screens
 
 // Parent (main) scene and camera
 const parentScene = new THREE.Scene();
@@ -17,15 +20,17 @@ const parentCamera = new THREE.PerspectiveCamera(
 );
 parentCamera.position.set(0, 1.25, 2.5);
 
-// Child (offscreen) scene and camera
+// Child A (offscreen) scene and camera - Raymarch Head
 const childScene = new THREE.Scene();
-const childCamera = new THREE.PerspectiveCamera(
-  60,
-  window.innerWidth / window.innerHeight,
-  0.05,
-  1000
-);
+const childCamera = new THREE.PerspectiveCamera(60, CHILD_ASPECT, 0.05, 1000);
 childCamera.position.set(0.0, 0.0, 1.2);
+childCamera.updateProjectionMatrix();
+
+// Child B (offscreen) scene and camera - Knot Morph
+const childScene2 = new THREE.Scene();
+const childCamera2 = new THREE.PerspectiveCamera(60, CHILD_ASPECT, 0.05, 1000);
+childCamera2.position.set(0, 0, 5);
+childCamera2.updateProjectionMatrix();
 
 // Renderer
 const renderer = new THREE.WebGPURenderer({
@@ -113,14 +118,13 @@ new THREE.FileLoader()
     childMesh.scale.set(1, -1, depth / width);
     childScene.add(childMesh);
 
-    // Screen in parent scene (16:9 plane) showing the child scene via pass(...)
+    // Screen A in parent scene (16:9 plane) showing the head via pass(...)
     const screenWidth = 1.6;
     const screenHeight = 0.9;
     const screenGeo = new THREE.PlaneGeometry(screenWidth, screenHeight);
     const screenMat = new THREE.MeshBasicNodeMaterial();
-    screenMat.colorNode = pass(childScene, childCamera).context({
-      getUV: () => screenUV,
-    });
+    // Use mesh UV mapping so the content is view-independent
+    screenMat.colorNode = pass(childScene, childCamera).getTextureNode();
     // Soft circular portal mask for a more "portal" vibe
     screenMat.opacityNode = uv().distance(0.5).remapClamp(0.33, 0.5).oneMinus();
     screenMat.transparent = true;
@@ -130,7 +134,7 @@ new THREE.FileLoader()
     screen.position.set(0, 1.0, 0);
     parentScene.add(screen);
 
-    // Simple 3D frame around the portal
+    // Simple 3D frame around portal A
     const frameDepth = 0.05;
     const frameThickness = 0.06;
     const frameMat = new THREE.MeshStandardMaterial({
@@ -163,6 +167,87 @@ new THREE.FileLoader()
     frameGroup.add(top, bot, left, right);
     frameGroup.position.copy(screen.position);
     parentScene.add(frameGroup);
+
+    // Screen B (knot morph) on the right
+    const screen2Geo = new THREE.PlaneGeometry(screenWidth, screenHeight);
+    const screen2Mat = new THREE.MeshBasicNodeMaterial();
+    // Use mesh UV mapping so the content is view-independent
+    screen2Mat.colorNode = pass(childScene2, childCamera2).getTextureNode();
+    screen2Mat.opacityNode = uv()
+      .distance(0.5)
+      .remapClamp(0.33, 0.5)
+      .oneMinus();
+    screen2Mat.transparent = true;
+    const screen2 = new THREE.Mesh(screen2Geo, screen2Mat);
+    screen2.material.side = THREE.DoubleSide;
+    screen2.renderOrder = 1;
+    screen2.position.set(2.0, 1.0, 0);
+    parentScene.add(screen2);
+
+    // Frame around portal B
+    const frameGroup2 = new THREE.Group();
+    const top2 = new THREE.Mesh(
+      new THREE.BoxGeometry(horizLen, frameThickness, frameDepth),
+      frameMat
+    );
+    const bot2 = new THREE.Mesh(
+      new THREE.BoxGeometry(horizLen, frameThickness, frameDepth),
+      frameMat
+    );
+    const left2 = new THREE.Mesh(
+      new THREE.BoxGeometry(frameThickness, screenHeight, frameDepth),
+      frameMat
+    );
+    const right2 = new THREE.Mesh(
+      new THREE.BoxGeometry(frameThickness, screenHeight, frameDepth),
+      frameMat
+    );
+    top2.position.set(0, screenHeight / 2 + frameThickness / 2, frameDepth / 2);
+    bot2.position.set(
+      0,
+      -screenHeight / 2 - frameThickness / 2,
+      frameDepth / 2
+    );
+    left2.position.set(
+      -screenWidth / 2 - frameThickness / 2,
+      0,
+      frameDepth / 2
+    );
+    right2.position.set(
+      screenWidth / 2 + frameThickness / 2,
+      0,
+      frameDepth / 2
+    );
+    frameGroup2.add(top2, bot2, left2, right2);
+    frameGroup2.position.copy(screen2.position);
+    parentScene.add(frameGroup2);
+
+    // Child B: Knot morph content
+    const startGeo = new THREE.TorusKnotGeometry(1, 0.4, 128, 32, 2, 3);
+    const targetGeo = new THREE.TorusKnotGeometry(1, 0.4, 128, 32, 3, 5);
+    const targetPositions = targetGeo.getAttribute("position").array;
+    startGeo.setAttribute(
+      "targetPosition",
+      new THREE.BufferAttribute(targetPositions, 3)
+    );
+    const knotMat = new THREE.MeshBasicNodeMaterial({
+      wireframe: true,
+      transparent: true,
+    });
+    knotMat.positionNode = knotMorphPosition();
+    knotMat.colorNode = color(0x00ff00);
+    const knotMesh = new THREE.Mesh(startGeo, knotMat);
+    childScene2.add(knotMesh);
+
+    // Fit knot inside childCamera2 frustum and center it
+    startGeo.computeBoundingSphere();
+    const radius = startGeo.boundingSphere?.radius || 1.5;
+    const vFov = (childCamera2.fov * Math.PI) / 180;
+    const fitHeightDistance = radius / Math.tan(vFov / 2);
+    const fitWidthDistance = (radius * CHILD_ASPECT) / Math.tan(vFov / 2);
+    const distance = Math.max(fitHeightDistance, fitWidthDistance) * 1.2; // margin
+    childCamera2.position.set(0, 0, distance);
+    childCamera2.lookAt(0, 0, 0);
 
     // Simple cinema-like stand for context
     const floor = new THREE.Mesh(
@@ -212,6 +297,11 @@ new THREE.FileLoader()
       );
       childCamera.lookAt(0, 0, 0);
 
+      // Child B animation (knot morph)
+      const mixFactor = Math.abs(Math.sin(now * 0.5));
+      knotMat.positionNode = knotMorphPosition({ mixFactor });
+      knotMesh.rotation.y += 0.01;
+
       // Render parent scene with user controls
       controls.update();
       renderer.render(parentScene, parentCamera);
@@ -222,7 +312,9 @@ new THREE.FileLoader()
       renderer.setSize(window.innerWidth, window.innerHeight);
       parentCamera.aspect = window.innerWidth / window.innerHeight;
       parentCamera.updateProjectionMatrix();
-      childCamera.aspect = window.innerWidth / window.innerHeight;
+      childCamera.aspect = CHILD_ASPECT;
       childCamera.updateProjectionMatrix();
+      childCamera2.aspect = CHILD_ASPECT;
+      childCamera2.updateProjectionMatrix();
     });
   });
