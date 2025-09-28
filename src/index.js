@@ -4,6 +4,7 @@ export {
   sphericalWaveDisplacement,
   displacedTexCoord,
   buildSphericalWaveCopyKernel,
+  simplexNoise3,
 } from "./waves.js";
 export { knotMorphPosition } from "./knotMorph.js";
 export { adaptiveRaymarch, averageIntensityProjection } from "./raymarch.js";
