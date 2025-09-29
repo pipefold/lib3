@@ -12,7 +12,7 @@ export default defineConfig(({ mode }) => {
     // Shared config (e.g., resolve alias for examples to import from src/)
     resolve: {
       alias: {
-        "@pipefold/tsl-lib": resolve(__dirname, "src/index.js"),
+        "@pipefold/lib3": resolve(__dirname, "src/index.js"),
       },
     },
   };
