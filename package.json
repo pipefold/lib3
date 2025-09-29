@@ -22,13 +22,10 @@
     "tag": "next"
   },
   "scripts": {
-    "build:lib": "vite build --mode lib",
-    "build:examples": "vite build",
-    "build": "pnpm build:lib && pnpm build:examples",
-    "dev": "vite",
-    "preview": "vite preview",
+    "build": "vite build",
+    "build:examples": "vite build --mode examples",
+    "dev": "vite --mode examples",
     "prepublishOnly": "pnpm build",
-    "publish:dry": "npm publish --dry-run",
     "test": "echo \"no tests\" && exit 0"
   },
   "keywords": [],

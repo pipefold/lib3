@@ -24,8 +24,29 @@ export default defineConfig(({ mode }) => {
     }),
   ];
 
-  if (mode === "lib") {
-    // Library build mode (from src/)
+  if (mode === "examples") {
+    // Serve/build examples as multi-page app
+    return {
+      ...common,
+      plugins: commonPlugins,
+      build: {
+        // Keep examples output separate from the library build
+        outDir: "dist-examples",
+        // Multi-page build config (dynamic inputs via glob)
+        rollupOptions: {
+          input: Object.fromEntries(
+            glob.sync("examples/**/index.html").map((file) => [
+              // Key: relative path without .html (e.g., 'examples/example1/index')
+              // This preserves sub-directory structure in dist-examples/
+              file.slice(0, -5),
+              fileURLToPath(new URL(file, import.meta.url)),
+            ])
+          ),
+        },
+      },
+    };
+  } else {
+    // Default: Library build mode (from src/)
     return {
       ...common,
       plugins: [
@@ -45,25 +66,6 @@ export default defineConfig(({ mode }) => {
         },
         sourcemap: true,
         emptyOutDir: true,
-      },
-    };
-  } else {
-    // Default mode: Serve/build examples as multi-page app
-    return {
-      ...common,
-      plugins: commonPlugins,
-      build: {
-        // Multi-page build config (dynamic inputs via glob)
-        rollupOptions: {
-          input: Object.fromEntries(
-            glob.sync("examples/**/index.html").map((file) => [
-              // Key: relative path without .html (e.g., 'examples/example1/index')
-              // This preserves sub-directory structure in dist/ (e.g., dist/examples/example1/index.html)
-              file.slice(0, -5),
-              fileURLToPath(new URL(file, import.meta.url)),
-            ])
-          ),
-        },
       },
     };
   }
