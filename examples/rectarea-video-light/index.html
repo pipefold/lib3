@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RectAreaLight with Video Texture</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+      #info {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        color: white;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 15px;
+        border-radius: 8px;
+        font-size: 14px;
+        max-width: 300px;
+        z-index: 100;
+      }
+      #info h2 {
+        margin: 0 0 10px 0;
+        font-size: 16px;
+      }
+      #video {
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="info">
+      <h2>RectAreaLight with Video Texture</h2>
+      <p>
+        The rectangular area light uses a procedurally generated video texture
+        as its color source via the <code>colorNode</code> property.
+      </p>
+      <p>The light dynamically emits colors from the animated texture!</p>
+    </div>
+    <canvas id="canvas"></canvas>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
