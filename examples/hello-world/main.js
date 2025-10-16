@@ -28,8 +28,8 @@ const mesh = new THREE.Mesh(new THREE.BoxGeometry(), material);
 scene.add(mesh);
 
 // Animate/render loop
-function animate() {
+async function animate() {
   requestAnimationFrame(animate);
-  renderer.render(scene, camera);
+  await renderer.renderAsync(scene, camera);
 }
 animate();
