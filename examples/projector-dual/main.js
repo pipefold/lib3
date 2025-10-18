@@ -1,30 +1,30 @@
-import * as THREE from "three/webgpu";
-import {
-  Fn,
-  vec3,
-  vec4,
-  sin,
-  abs,
-  uniform,
-  time,
-  texture3D,
-  pass,
-  screenUV,
-  screenCoordinate,
-  mx_noise_vec3,
-  instanceIndex,
-  textureStore,
-  float,
-  If,
-  Break,
-  smoothstep,
-} from "three/tsl";
+import atlasURL from "@videos/atlas-demo-3x.mp4";
+import buildxURL from "@videos/buildx-demo-5x.mp4";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { Inspector } from "three/addons/inspector/Inspector.js";
-import { bayer16 } from "three/addons/tsl/math/Bayer.js";
+import { EXRLoader } from "three/addons/loaders/EXRLoader.js";
 import { gaussianBlur } from "three/addons/tsl/display/GaussianBlurNode.js";
-import { RaymarchingBox } from "three/addons/tsl/utils/Raymarching.js";
+import { bayer16 } from "three/addons/tsl/math/Bayer.js";
+import {
+  abs,
+  float,
+  Fn,
+  instanceIndex,
+  mx_noise_vec3,
+  pass,
+  screenCoordinate,
+  screenUV,
+  sin,
+  smoothstep,
+  texture3D,
+  textureStore,
+  time,
+  uniform,
+  vec3,
+  vec4,
+} from "three/tsl";
+import * as THREE from "three/webgpu";
 
 // Phase 1: No passes/compute/morphs
 
@@ -62,7 +62,7 @@ floor.receiveShadow = true;
 scene.add(floor);
 
 // Wall at z=0 for projector visualization
-const wallMat = new THREE.MeshStandardNodeMaterial({
+const wallMat = new THREE.MeshStandardMaterial({
   color: 0x808080,
   roughness: 1.0,
   metalness: 0.0,
@@ -70,7 +70,58 @@ const wallMat = new THREE.MeshStandardNodeMaterial({
 const wall = new THREE.Mesh(new THREE.BoxGeometry(30, 15, 0.5), wallMat);
 wall.position.set(0, 7.5, 0); // Position at z=0
 wall.receiveShadow = true;
+wall.castShadow = true;
+// Use double-sided shadowing to reduce leaks on thin geometry
+wall.material.shadowSide = THREE.DoubleSide;
 scene.add(wall);
+
+// Apply plastered stone wall textures
+(() => {
+  const texBasePath = "../assets/textures/";
+  const textureLoader = new THREE.TextureLoader();
+  const exrLoader = new EXRLoader();
+
+  // Helper to configure tiling consistently
+  function setupTiling(t) {
+    t.wrapS = THREE.RepeatWrapping;
+    t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 8;
+    t.repeat.set(4, 2);
+  }
+
+  // Albedo (sRGB)
+  textureLoader.load(
+    texBasePath + "plastered_stone_wall_diff_4k.jpg",
+    (map) => {
+      map.colorSpace = THREE.SRGBColorSpace;
+      setupTiling(map);
+      wall.material.map = map;
+      wall.material.needsUpdate = true;
+    }
+  );
+
+  // Normal (linear EXR)
+  exrLoader.load(
+    texBasePath + "plastered_stone_wall_nor_gl_4k.exr",
+    (normalMap) => {
+      setupTiling(normalMap);
+      wall.material.normalMap = normalMap;
+      wall.material.normalScale = new THREE.Vector2(1, 1);
+      wall.material.needsUpdate = true;
+    }
+  );
+
+  // Roughness (linear EXR)
+  exrLoader.load(
+    texBasePath + "plastered_stone_wall_rough_4k.exr",
+    (roughnessMap) => {
+      setupTiling(roughnessMap);
+      wall.material.roughnessMap = roughnessMap;
+      wall.material.roughness = 1.0;
+      wall.material.needsUpdate = true;
+    }
+  );
+})();
 
 // Helpers for spatial orientation
 const grid = new THREE.GridHelper(40, 40, 0x666666, 0x333333);
@@ -99,8 +150,8 @@ function createProjector(name, colorHex, pos) {
   root.position.set(...pos);
   projector.angle = Math.PI / 8;
   projector.penumbra = 1;
-  projector.decay = 2;
-  projector.distance = 0; // infinite
+  projector.decay = 0.5;
+  projector.distance = 10; // infinite
   projector.castShadow = true;
   projector.shadow.mapSize.set(1024, 1024);
   projector.shadow.camera.near = 0.5;
@@ -114,7 +165,7 @@ function createProjector(name, colorHex, pos) {
     new THREE.MeshStandardMaterial({
       color: colorHex,
       emissive: colorHex,
-      emissiveIntensity: 0.4,
+      emissiveIntensity: 1,
     })
   );
   cone.rotation.x = Math.PI / 2; // -Z forward
@@ -130,8 +181,8 @@ function createProjector(name, colorHex, pos) {
   return { root, projector, cone };
 }
 
-const projA = createProjector("Projector A", 0xffcc88, [-6, 5, 6]);
-const projB = createProjector("Projector B", 0x88ccff, [6, 5, 6]);
+const projA = createProjector("Projector A", 0xffffff, [-6, 5, 6]);
+const projB = createProjector("Projector B", 0xffffff, [6, 5, 6]);
 
 // Function to calculate closest point on wall surface
 function getClosestWallPoint(position) {
@@ -217,12 +268,44 @@ const canvasB = makeCanvasTexture((ctx, t) => {
   ctx.fillRect(0, 0, w, h);
 });
 
+// --- HTMLVideoElement-backed textures ---
+function makeVideoTexture(url) {
+  const video = document.createElement("video");
+  video.src = url;
+  video.preload = "auto";
+  video.crossOrigin = "anonymous";
+  video.loop = true;
+  video.muted = true; // allow autoplay
+  video.playsInline = true;
+  video.autoplay = true;
+
+  const tex = new THREE.VideoTexture(video);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return { video, texture: tex };
+}
+
+const videoAtlas = makeVideoTexture(atlasURL);
+const videoBuildx = makeVideoTexture(buildxURL);
+
+function ensureVideoPlayback() {
+  const tryPlay = (v) => v.play && v.play().catch(() => {});
+  tryPlay(videoAtlas.video);
+  tryPlay(videoBuildx.video);
+}
+
 function setProjectorContent(projector, type) {
   projector.colorNode = null;
   if (type === "canvasA") {
     projector.map = canvasA.texture;
   } else if (type === "canvasB") {
     projector.map = canvasB.texture;
+  } else if (type === "videoAtlas") {
+    projector.map = videoAtlas.texture;
+  } else if (type === "videoBuildx") {
+    projector.map = videoBuildx.texture;
   } else if (type === "procedural") {
     // simple animated stripes via TSL using projectorUV length
     projector.colorNode = Fn(([projectorUV]) => {
@@ -237,8 +320,8 @@ function setProjectorContent(projector, type) {
   }
 }
 
-setProjectorContent(projA.projector, "canvasA");
-setProjectorContent(projB.projector, "canvasB");
+setProjectorContent(projA.projector, "videoAtlas");
+setProjectorContent(projB.projector, "videoBuildx");
 
 // --- TransformControls + selection ---
 const tControls = new TransformControls(camera, renderer.domElement);
@@ -299,7 +382,14 @@ function addProjectorGUI(label, proj, initialType) {
   };
 
   folder
-    .add(params, "content", ["none", "canvasA", "canvasB", "procedural"])
+    .add(params, "content", [
+      "none",
+      "canvasA",
+      "canvasB",
+      "videoAtlas",
+      "videoBuildx",
+      "procedural",
+    ])
     .onChange((v) => setProjectorContent(proj.projector, v));
   folder
     .addColor(params, "color")
@@ -328,8 +418,8 @@ function addProjectorGUI(label, proj, initialType) {
   });
 }
 
-addProjectorGUI("Projector A", projA, "head");
-addProjectorGUI("Projector B", projB, "knot");
+addProjectorGUI("Projector A", projA, "videoAtlas");
+addProjectorGUI("Projector B", projB, "videoBuildx");
 
 // --- Volumetric Medium (Compute-generated Cloud) ---
 let postProcessing;
@@ -421,7 +511,9 @@ postProcessing = new THREE.PostProcessing(renderer);
 const volumetricIntensity = uniform(1.0);
 const scenePass = pass(scene, camera);
 const sceneDepth = scenePass.getTextureNode("depth");
-// Note: The new material doesn't use depthNode in the same way
+
+// Connect the depth buffer to the volumetric material so it knows where solid objects are
+volumetricMaterial.depthNode = sceneDepth.sample(screenUV);
 
 const volumetricPass = pass(scene, camera, { depthBuffer: false });
 volumetricPass.name = "Volumetric Lighting";
@@ -469,6 +561,8 @@ window.addEventListener("resize", () => {
 // --- Initialize renderer and start animation ---
 async function startAnimation() {
   await renderer.init();
+  // try to start videos after renderer is ready; browsers may still require user gesture
+  ensureVideoPlayback();
   await renderer.computeAsync(computeNode);
 
   let last = performance.now() * 0.001;
@@ -499,3 +593,9 @@ async function startAnimation() {
 }
 
 startAnimation();
+
+// Ensure playback on first interaction if autoplay was blocked
+renderer.domElement.addEventListener("pointerdown", function once() {
+  ensureVideoPlayback();
+  renderer.domElement.removeEventListener("pointerdown", once);
+});
