@@ -150,8 +150,8 @@ function createProjector(name, colorHex, pos) {
   root.position.set(...pos);
   projector.angle = Math.PI / 8;
   projector.penumbra = 1;
-  projector.decay = 2;
-  projector.distance = 0; // infinite
+  projector.decay = 0.5;
+  projector.distance = 10; // infinite
   projector.castShadow = true;
   projector.shadow.mapSize.set(1024, 1024);
   projector.shadow.camera.near = 0.5;
@@ -165,7 +165,7 @@ function createProjector(name, colorHex, pos) {
     new THREE.MeshStandardMaterial({
       color: colorHex,
       emissive: colorHex,
-      emissiveIntensity: 0.4,
+      emissiveIntensity: 1,
     })
   );
   cone.rotation.x = Math.PI / 2; // -Z forward
@@ -181,8 +181,8 @@ function createProjector(name, colorHex, pos) {
   return { root, projector, cone };
 }
 
-const projA = createProjector("Projector A", 0xffcc88, [-6, 5, 6]);
-const projB = createProjector("Projector B", 0x88ccff, [6, 5, 6]);
+const projA = createProjector("Projector A", 0xffffff, [-6, 5, 6]);
+const projB = createProjector("Projector B", 0xffffff, [6, 5, 6]);
 
 // Function to calculate closest point on wall surface
 function getClosestWallPoint(position) {
