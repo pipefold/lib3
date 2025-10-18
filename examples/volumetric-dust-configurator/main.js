@@ -8,6 +8,13 @@ import {
   pass,
   screenUV,
   screenCoordinate,
+  instancedArray,
+  instanceIndex,
+  hash,
+  float,
+  If,
+  shapeCircle,
+  positionWorld,
 } from "three/tsl";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { Inspector } from "three/addons/inspector/Inspector.js";
@@ -294,6 +301,126 @@ volumetricBox.layers.disableAll();
 volumetricBox.layers.enable(LAYER_VOLUMETRIC);
 scene.add(volumetricBox);
 
+// === Floating Dust Particles ===
+const dustParticleCount = 10000;
+
+// Create storage buffers for particle data
+const particlePositions = instancedArray(dustParticleCount, "vec3");
+const particleVelocities = instancedArray(dustParticleCount, "vec3");
+const particleData = instancedArray(dustParticleCount, "vec4");
+
+// Initialize particles
+const computeInitParticles = Fn(() => {
+  const position = particlePositions.element(instanceIndex);
+  const velocity = particleVelocities.element(instanceIndex);
+  const data = particleData.element(instanceIndex);
+
+  const randX = hash(instanceIndex);
+  const randY = hash(instanceIndex.add(1000));
+  const randZ = hash(instanceIndex.add(2000));
+
+  position.x = randX.mul(28).add(-14);
+  position.y = randY.mul(11);
+  position.z = randZ.mul(28).add(-14);
+
+  velocity.x = hash(instanceIndex.add(3000)).sub(0.5).mul(0.01);
+  velocity.y = hash(instanceIndex.add(4000)).sub(0.5).mul(0.005);
+  velocity.z = hash(instanceIndex.add(5000)).sub(0.5).mul(0.01);
+
+  data.x = hash(instanceIndex.add(6000)).mul(0.5).add(0.5);
+  data.y = randX;
+})()
+  .compute(dustParticleCount)
+  .setName("Init Dust Particles");
+
+// Update particles
+const computeUpdateParticles = Fn(() => {
+  const position = particlePositions.element(instanceIndex);
+  const velocity = particleVelocities.element(instanceIndex);
+  const data = particleData.element(instanceIndex);
+
+  const t = time.mul(0.5);
+  const phaseOffset = data.y.mul(10);
+
+  const driftX = t.add(phaseOffset).sin().mul(0.002);
+  const driftZ = t.add(phaseOffset).cos().mul(0.002);
+
+  velocity.x = velocity.x.mul(0.98).add(driftX);
+  velocity.z = velocity.z.mul(0.98).add(driftZ);
+  velocity.y = velocity.y.mul(0.99).add(-0.001);
+
+  position.addAssign(velocity);
+
+  If(position.y.lessThan(0), () => {
+    position.y = float(11);
+  });
+
+  If(position.x.lessThan(-14).or(position.x.greaterThan(14)), () => {
+    position.x = position.x.mul(-1).mul(0.9);
+  });
+
+  If(position.z.lessThan(-14).or(position.z.greaterThan(14)), () => {
+    position.z = position.z.mul(-1).mul(0.9);
+  });
+});
+
+const computeDustParticles =
+  computeUpdateParticles().compute(dustParticleCount);
+
+// Create particle material
+const dustParticleMaterial = new THREE.SpriteNodeMaterial();
+dustParticleMaterial.depthWrite = false;
+dustParticleMaterial.transparent = true;
+dustParticleMaterial.blending = THREE.AdditiveBlending;
+dustParticleMaterial.positionNode = particlePositions.toAttribute();
+dustParticleMaterial.scaleNode = particleData.toAttribute().x.mul(0.03);
+
+// Light-reactive color
+const spotLightPos = uniform(spotLight.position);
+const spotLightTarget = uniform(spotLight.target.position);
+const pointLightPos = uniform(pointLight.position);
+
+dustParticleMaterial.colorNode = Fn(() => {
+  const worldPos = positionWorld;
+
+  // Spotlight beam detection
+  const toLight = worldPos.sub(spotLightPos);
+  const lightDir = spotLightTarget.sub(spotLightPos).normalize();
+  const projectionLength = toLight.dot(lightDir).max(0);
+  const projectedPoint = spotLightPos.add(lightDir.mul(projectionLength));
+  const distToRay = worldPos.sub(projectedPoint).length();
+
+  const inSpotBeam = float(1).sub(distToRay.div(2.5)).max(0).pow(2.5).mul(3.0);
+
+  // Point light influence
+  const distToPoint = worldPos.sub(pointLightPos).length();
+  const pointLightInfluence = float(1)
+    .sub(distToPoint.div(12))
+    .max(0)
+    .pow(2)
+    .mul(1.5);
+
+  const spotColor = vec3(1.0, 1.0, 1.0);
+  const pointColor = vec3(1.0, 0.53, 0.27);
+
+  const finalColor = spotColor
+    .mul(inSpotBeam)
+    .add(pointColor.mul(pointLightInfluence));
+
+  // Higher ambient so particles are always visible
+  return finalColor.add(vec3(0.08));
+})();
+
+dustParticleMaterial.opacityNode = shapeCircle().mul(0.6);
+
+const dustParticles = new THREE.Sprite(dustParticleMaterial);
+dustParticles.count = dustParticleCount;
+dustParticles.frustumCulled = false;
+scene.add(dustParticles);
+
+// Initialize
+renderer.computeAsync(computeInitParticles);
+
 // === Post-Processing Setup ===
 const postProcessing = new THREE.PostProcessing(renderer);
 
@@ -421,6 +548,31 @@ dirFolder.addColor(dirParams, "color").onChange((value) => {
 });
 dirFolder.add(directionalLight, "intensity", 0, 10, 0.5).name("intensity");
 
+// --- Dust Particles ---
+const particlesFolder = gui.addFolder("Dust Particles");
+const particleParams = {
+  enabled: true,
+  particleOpacity: 0.6,
+  particleSize: 0.03,
+};
+particlesFolder.add(particleParams, "enabled").onChange((value) => {
+  dustParticles.visible = value;
+});
+particlesFolder
+  .add(particleParams, "particleOpacity", 0, 1, 0.05)
+  .name("opacity")
+  .onChange((value) => {
+    dustParticleMaterial.opacityNode = shapeCircle().mul(value);
+    dustParticleMaterial.needsUpdate = true;
+  });
+particlesFolder
+  .add(particleParams, "particleSize", 0.01, 0.1, 0.01)
+  .name("size")
+  .onChange((value) => {
+    dustParticleMaterial.scaleNode = particleData.toAttribute().x.mul(value);
+    dustParticleMaterial.needsUpdate = true;
+  });
+
 // --- Scene Options ---
 const sceneFolder = gui.addFolder("Scene Options");
 const sceneParams = {
@@ -452,6 +604,9 @@ function animate() {
   // Update light helpers
   spotLightHelper.position.copy(spotLight.position);
   pointLightHelper.position.copy(pointLight.position);
+
+  // Update dust particles
+  renderer.compute(computeDustParticles);
 
   // Render
   postProcessing.render();

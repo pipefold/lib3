@@ -133,8 +133,14 @@ function getClosestWallPoint(position) {
 
   // Calculate closest point on wall rectangle (front face at z=0)
   const closest = new THREE.Vector3(
-    Math.max(wallCenter.x - wallWidth/2, Math.min(position.x, wallCenter.x + wallWidth/2)),
-    Math.max(wallCenter.y - wallHeight/2, Math.min(position.y, wallCenter.y + wallHeight/2)),
+    Math.max(
+      wallCenter.x - wallWidth / 2,
+      Math.min(position.x, wallCenter.x + wallWidth / 2)
+    ),
+    Math.max(
+      wallCenter.y - wallHeight / 2,
+      Math.min(position.y, wallCenter.y + wallHeight / 2)
+    ),
     wallCenter.z // Always on the wall surface (z=0)
   );
 
