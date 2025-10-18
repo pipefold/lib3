@@ -2,6 +2,7 @@ import * as THREE from "three/webgpu";
 import {
   Fn,
   vec3,
+  vec4,
   sin,
   abs,
   uniform,
@@ -10,12 +11,20 @@ import {
   pass,
   screenUV,
   screenCoordinate,
+  mx_noise_vec3,
+  instanceIndex,
+  textureStore,
+  float,
+  If,
+  Break,
+  smoothstep,
 } from "three/tsl";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { Inspector } from "three/addons/inspector/Inspector.js";
 import { bayer16 } from "three/addons/tsl/math/Bayer.js";
 import { gaussianBlur } from "three/addons/tsl/display/GaussianBlurNode.js";
+import { RaymarchingBox } from "three/addons/tsl/utils/Raymarching.js";
 
 // Phase 1: No passes/compute/morphs
 
@@ -322,67 +331,86 @@ function addProjectorGUI(label, proj, initialType) {
 addProjectorGUI("Projector A", projA, "head");
 addProjectorGUI("Projector B", projB, "knot");
 
-// --- Volumetric Medium (16x16x16) ---
+// --- Volumetric Medium (Compute-generated Cloud) ---
 let postProcessing;
+let computeNode;
 
-function createTexture3D_16() {
-  const size = 16;
-  const data = new Uint8Array(size * size * size);
-  let i = 0;
-  // Simple soft spherical falloff density centered in the volume
-  for (let z = 0; z < size; z++) {
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        const nx = ((x + 0.5) / size) * 2 - 1;
-        const ny = ((y + 0.5) / size) * 2 - 1;
-        const nz = ((z + 0.5) / size) * 2 - 1;
-        const r = Math.sqrt(nx * nx + ny * ny + nz * nz);
-        const d = Math.max(0, 1 - r);
-        data[i++] = Math.min(255, Math.floor(d * 255));
-      }
-    }
-  }
-  const tex = new THREE.Data3DTexture(data, size, size, size);
-  tex.format = THREE.RedFormat;
-  tex.minFilter = THREE.LinearFilter;
-  tex.magFilter = THREE.LinearFilter;
-  tex.wrapS = THREE.ClampToEdgeWrapping;
-  tex.wrapT = THREE.ClampToEdgeWrapping;
-  tex.wrapR = THREE.ClampToEdgeWrapping;
-  tex.unpackAlignment = 1;
-  tex.needsUpdate = true;
-  return tex;
+// Create compute shader for cloud generation
+function createCloudTexture() {
+  const size = 200;
+
+  const computeCloud = Fn(({ storageTexture }) => {
+    const scale = float(0.05);
+    const id = instanceIndex;
+
+    const x = id.mod(size);
+    const y = id.div(size).mod(size);
+    const z = id.div(size * size);
+
+    const coord3d = vec3(x, y, z);
+    const centered = coord3d.sub(size / 2).div(size);
+    const d = float(1.0).sub(centered.length());
+
+    const noiseCoord = coord3d.mul(scale.div(1.5)).add(time);
+
+    const noise = mx_noise_vec3(noiseCoord).toConst("noise");
+
+    const data = noise.mul(d).mul(d).toConst("data");
+
+    textureStore(storageTexture, vec3(x, y, z), vec4(vec3(data.x), 1.0));
+  });
+
+  const storageTexture = new THREE.Storage3DTexture(size, size, size);
+  storageTexture.generateMipmaps = false;
+  storageTexture.name = "cloud";
+
+  computeNode = computeCloud({ storageTexture })
+    .compute(size * size * size)
+    .setName("computeCloud");
+
+  return storageTexture;
 }
 
 const volumetricLayer = new THREE.Layers();
 volumetricLayer.disableAll();
 volumetricLayer.enable(LAYER_VOLUMETRIC);
 
-const densityTex3D = createTexture3D_16();
+const densityTex3D = createCloudTexture();
+
+// Material parameters - VolumeNodeMaterial supports lights
+const densityScale = uniform(0.5);
+const range = uniform(0.1);
+const threshold = uniform(0.08);
 
 const volumetricMaterial = new THREE.VolumeNodeMaterial();
-volumetricMaterial.steps = 12; // tweakable via GUI
+volumetricMaterial.steps = 100;
 volumetricMaterial.offsetNode = bayer16(screenCoordinate);
 
-// Controls for density and tiling
-const densityScale = uniform(1.0);
-const tileScale = uniform(1.0);
+// Scattering function that samples the compute-generated cloud texture
 volumetricMaterial.scatteringNode = Fn(({ positionRay }) => {
-  // Map world position into [0,1] using a simple scale and modulo to stay in range
-  const uvw = positionRay
-    .mul(tileScale)
-    .mul(1 / 16)
-    .mod(1);
-  const d = texture3D(densityTex3D, uvw, 0).r;
-  return d.mul(densityScale);
+  // Normalize position to [0,1] for texture sampling
+  // The volume box will be 40x20x30, so we need to scale appropriately
+  const boxSize = vec3(40, 20, 30);
+  const uvw = positionRay.div(boxSize).add(0.5);
+
+  const mapValue = texture3D(densityTex3D, uvw, 0).r;
+
+  // Apply threshold and smoothing
+  const density = smoothstep(
+    threshold.sub(range),
+    threshold.add(range),
+    mapValue
+  );
+
+  return density.mul(densityScale);
 });
 
 const volumetricBox = new THREE.Mesh(
-  new THREE.BoxGeometry(16, 16, 16),
+  new THREE.BoxGeometry(40, 20, 30),
   volumetricMaterial
 );
-volumetricBox.position.set(0, 8, -2);
-volumetricBox.receiveShadow = true;
+volumetricBox.position.set(0, 10, 0);
+volumetricBox.receiveShadow = false;
 volumetricBox.layers.disableAll();
 volumetricBox.layers.enable(LAYER_VOLUMETRIC);
 scene.add(volumetricBox);
@@ -393,7 +421,7 @@ postProcessing = new THREE.PostProcessing(renderer);
 const volumetricIntensity = uniform(1.0);
 const scenePass = pass(scene, camera);
 const sceneDepth = scenePass.getTextureNode("depth");
-volumetricMaterial.depthNode = sceneDepth.sample(screenUV);
+// Note: The new material doesn't use depthNode in the same way
 
 const volumetricPass = pass(scene, camera, { depthBuffer: false });
 volumetricPass.name = "Volumetric Lighting";
@@ -417,7 +445,7 @@ const qualityParams = {
 volFolder
   .add(qualityParams, "resolution", 0.1, 1)
   .onChange((v) => volumetricPass.setResolutionScale(v));
-volFolder.add(volumetricMaterial, "steps", 2, 32).name("step count");
+volFolder.add(volumetricMaterial, "steps", 10, 200, 1).name("step count");
 volFolder.add(denoiseStrength, "value", 0, 1).name("denoise strength");
 volFolder.add(qualityParams, "denoise").onChange((denoise) => {
   blurredVolumetricPass = gaussianBlur(volumetricPass, denoiseStrength);
@@ -427,8 +455,9 @@ volFolder.add(qualityParams, "denoise").onChange((denoise) => {
   postProcessing.needsUpdate = true;
 });
 volFolder.add(volumetricIntensity, "value", 0, 5).name("intensity");
-volFolder.add(densityScale, "value", 0, 5).name("density");
-volFolder.add(tileScale, "value", 0.1, 4).name("tile scale");
+volFolder.add(densityScale, "value", 0, 2, 0.01).name("density scale");
+volFolder.add(threshold, "value", 0, 1, 0.01).name("threshold");
+volFolder.add(range, "value", 0, 1, 0.01).name("range");
 
 // --- Resize ---
 window.addEventListener("resize", () => {
@@ -437,26 +466,36 @@ window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// --- Animation Loop ---
-let last = performance.now() * 0.001;
+// --- Initialize renderer and start animation ---
+async function startAnimation() {
+  await renderer.init();
+  await renderer.computeAsync(computeNode);
 
-renderer.setAnimationLoop(() => {
-  const now = performance.now() * 0.001;
-  const dt = Math.min(0.1, now - last);
-  last = now;
+  let last = performance.now() * 0.001;
 
-  // Update projector targets to follow closest wall points
-  updateProjectorTargets();
+  renderer.setAnimationLoop(() => {
+    const now = performance.now() * 0.001;
+    const dt = Math.min(0.1, now - last);
+    last = now;
 
-  // Update canvas textures
-  canvasA.draw(canvasA.ctx, now);
-  canvasA.texture.needsUpdate = true;
-  canvasB.draw(canvasB.ctx, now);
-  canvasB.texture.needsUpdate = true;
+    // Update projector targets to follow closest wall points
+    updateProjectorTargets();
 
-  if (postProcessing) {
-    postProcessing.render();
-  } else {
-    renderer.render(scene, camera);
-  }
-});
+    // Update canvas textures
+    canvasA.draw(canvasA.ctx, now);
+    canvasA.texture.needsUpdate = true;
+    canvasB.draw(canvasB.ctx, now);
+    canvasB.texture.needsUpdate = true;
+
+    // Update compute texture
+    renderer.computeAsync(computeNode);
+
+    if (postProcessing) {
+      postProcessing.render();
+    } else {
+      renderer.render(scene, camera);
+    }
+  });
+}
+
+startAnimation();
