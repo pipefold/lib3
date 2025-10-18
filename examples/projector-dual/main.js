@@ -1,31 +1,30 @@
-import * as THREE from "three/webgpu";
-import {
-  Fn,
-  vec3,
-  vec4,
-  sin,
-  abs,
-  uniform,
-  time,
-  texture3D,
-  pass,
-  screenUV,
-  screenCoordinate,
-  mx_noise_vec3,
-  instanceIndex,
-  textureStore,
-  float,
-  If,
-  Break,
-  smoothstep,
-} from "three/tsl";
+import atlasURL from "@videos/atlas-demo-3x.mp4";
+import buildxURL from "@videos/buildx-demo-5x.mp4";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { Inspector } from "three/addons/inspector/Inspector.js";
 import { EXRLoader } from "three/addons/loaders/EXRLoader.js";
-import { bayer16 } from "three/addons/tsl/math/Bayer.js";
 import { gaussianBlur } from "three/addons/tsl/display/GaussianBlurNode.js";
-import { RaymarchingBox } from "three/addons/tsl/utils/Raymarching.js";
+import { bayer16 } from "three/addons/tsl/math/Bayer.js";
+import {
+  abs,
+  float,
+  Fn,
+  instanceIndex,
+  mx_noise_vec3,
+  pass,
+  screenCoordinate,
+  screenUV,
+  sin,
+  smoothstep,
+  texture3D,
+  textureStore,
+  time,
+  uniform,
+  vec3,
+  vec4,
+} from "three/tsl";
+import * as THREE from "three/webgpu";
 
 // Phase 1: No passes/compute/morphs
 
@@ -269,12 +268,44 @@ const canvasB = makeCanvasTexture((ctx, t) => {
   ctx.fillRect(0, 0, w, h);
 });
 
+// --- HTMLVideoElement-backed textures ---
+function makeVideoTexture(url) {
+  const video = document.createElement("video");
+  video.src = url;
+  video.preload = "auto";
+  video.crossOrigin = "anonymous";
+  video.loop = true;
+  video.muted = true; // allow autoplay
+  video.playsInline = true;
+  video.autoplay = true;
+
+  const tex = new THREE.VideoTexture(video);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = false;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return { video, texture: tex };
+}
+
+const videoAtlas = makeVideoTexture(atlasURL);
+const videoBuildx = makeVideoTexture(buildxURL);
+
+function ensureVideoPlayback() {
+  const tryPlay = (v) => v.play && v.play().catch(() => {});
+  tryPlay(videoAtlas.video);
+  tryPlay(videoBuildx.video);
+}
+
 function setProjectorContent(projector, type) {
   projector.colorNode = null;
   if (type === "canvasA") {
     projector.map = canvasA.texture;
   } else if (type === "canvasB") {
     projector.map = canvasB.texture;
+  } else if (type === "videoAtlas") {
+    projector.map = videoAtlas.texture;
+  } else if (type === "videoBuildx") {
+    projector.map = videoBuildx.texture;
   } else if (type === "procedural") {
     // simple animated stripes via TSL using projectorUV length
     projector.colorNode = Fn(([projectorUV]) => {
@@ -289,8 +320,8 @@ function setProjectorContent(projector, type) {
   }
 }
 
-setProjectorContent(projA.projector, "canvasA");
-setProjectorContent(projB.projector, "canvasB");
+setProjectorContent(projA.projector, "videoAtlas");
+setProjectorContent(projB.projector, "videoBuildx");
 
 // --- TransformControls + selection ---
 const tControls = new TransformControls(camera, renderer.domElement);
@@ -351,7 +382,14 @@ function addProjectorGUI(label, proj, initialType) {
   };
 
   folder
-    .add(params, "content", ["none", "canvasA", "canvasB", "procedural"])
+    .add(params, "content", [
+      "none",
+      "canvasA",
+      "canvasB",
+      "videoAtlas",
+      "videoBuildx",
+      "procedural",
+    ])
     .onChange((v) => setProjectorContent(proj.projector, v));
   folder
     .addColor(params, "color")
@@ -380,8 +418,8 @@ function addProjectorGUI(label, proj, initialType) {
   });
 }
 
-addProjectorGUI("Projector A", projA, "head");
-addProjectorGUI("Projector B", projB, "knot");
+addProjectorGUI("Projector A", projA, "videoAtlas");
+addProjectorGUI("Projector B", projB, "videoBuildx");
 
 // --- Volumetric Medium (Compute-generated Cloud) ---
 let postProcessing;
@@ -523,6 +561,8 @@ window.addEventListener("resize", () => {
 // --- Initialize renderer and start animation ---
 async function startAnimation() {
   await renderer.init();
+  // try to start videos after renderer is ready; browsers may still require user gesture
+  ensureVideoPlayback();
   await renderer.computeAsync(computeNode);
 
   let last = performance.now() * 0.001;
@@ -553,3 +593,9 @@ async function startAnimation() {
 }
 
 startAnimation();
+
+// Ensure playback on first interaction if autoplay was blocked
+renderer.domElement.addEventListener("pointerdown", function once() {
+  ensureVideoPlayback();
+  renderer.domElement.removeEventListener("pointerdown", once);
+});
