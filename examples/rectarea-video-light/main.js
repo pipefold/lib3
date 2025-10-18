@@ -8,9 +8,8 @@ let rectLight1, rectLight2;
 let videoTexture, canvas2d, ctx;
 
 init();
-animate();
 
-function init() {
+async function init() {
   // Initialize WebGPU Renderer
   renderer = new THREE.WebGPURenderer({
     antialias: true,
@@ -20,7 +19,10 @@ function init() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.2;
-  1;
+
+  // Initialize WebGPU backend
+  await renderer.init();
+
   // Initialize RectAreaLight textures for WebGPU
   THREE.RectAreaLightNode.setLTC(RectAreaLightTexturesLib.init());
 
@@ -151,6 +153,9 @@ function init() {
 
   // Handle window resize
   window.addEventListener("resize", onWindowResize);
+
+  // Start animation loop after renderer is initialized
+  animate();
 }
 
 function createProceduralVideoTexture() {

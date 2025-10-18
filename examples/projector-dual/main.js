@@ -22,6 +22,7 @@ import {
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { Inspector } from "three/addons/inspector/Inspector.js";
+import { EXRLoader } from "three/addons/loaders/EXRLoader.js";
 import { bayer16 } from "three/addons/tsl/math/Bayer.js";
 import { gaussianBlur } from "three/addons/tsl/display/GaussianBlurNode.js";
 import { RaymarchingBox } from "three/addons/tsl/utils/Raymarching.js";
@@ -62,7 +63,7 @@ floor.receiveShadow = true;
 scene.add(floor);
 
 // Wall at z=0 for projector visualization
-const wallMat = new THREE.MeshStandardNodeMaterial({
+const wallMat = new THREE.MeshStandardMaterial({
   color: 0x808080,
   roughness: 1.0,
   metalness: 0.0,
@@ -70,7 +71,58 @@ const wallMat = new THREE.MeshStandardNodeMaterial({
 const wall = new THREE.Mesh(new THREE.BoxGeometry(30, 15, 0.5), wallMat);
 wall.position.set(0, 7.5, 0); // Position at z=0
 wall.receiveShadow = true;
+wall.castShadow = true;
+// Use double-sided shadowing to reduce leaks on thin geometry
+wall.material.shadowSide = THREE.DoubleSide;
 scene.add(wall);
+
+// Apply plastered stone wall textures
+(() => {
+  const texBasePath = "../assets/textures/";
+  const textureLoader = new THREE.TextureLoader();
+  const exrLoader = new EXRLoader();
+
+  // Helper to configure tiling consistently
+  function setupTiling(t) {
+    t.wrapS = THREE.RepeatWrapping;
+    t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 8;
+    t.repeat.set(4, 2);
+  }
+
+  // Albedo (sRGB)
+  textureLoader.load(
+    texBasePath + "plastered_stone_wall_diff_4k.jpg",
+    (map) => {
+      map.colorSpace = THREE.SRGBColorSpace;
+      setupTiling(map);
+      wall.material.map = map;
+      wall.material.needsUpdate = true;
+    }
+  );
+
+  // Normal (linear EXR)
+  exrLoader.load(
+    texBasePath + "plastered_stone_wall_nor_gl_4k.exr",
+    (normalMap) => {
+      setupTiling(normalMap);
+      wall.material.normalMap = normalMap;
+      wall.material.normalScale = new THREE.Vector2(1, 1);
+      wall.material.needsUpdate = true;
+    }
+  );
+
+  // Roughness (linear EXR)
+  exrLoader.load(
+    texBasePath + "plastered_stone_wall_rough_4k.exr",
+    (roughnessMap) => {
+      setupTiling(roughnessMap);
+      wall.material.roughnessMap = roughnessMap;
+      wall.material.roughness = 1.0;
+      wall.material.needsUpdate = true;
+    }
+  );
+})();
 
 // Helpers for spatial orientation
 const grid = new THREE.GridHelper(40, 40, 0x666666, 0x333333);
@@ -421,7 +473,9 @@ postProcessing = new THREE.PostProcessing(renderer);
 const volumetricIntensity = uniform(1.0);
 const scenePass = pass(scene, camera);
 const sceneDepth = scenePass.getTextureNode("depth");
-// Note: The new material doesn't use depthNode in the same way
+
+// Connect the depth buffer to the volumetric material so it knows where solid objects are
+volumetricMaterial.depthNode = sceneDepth.sample(screenUV);
 
 const volumetricPass = pass(scene, camera, { depthBuffer: false });
 volumetricPass.name = "Volumetric Lighting";
