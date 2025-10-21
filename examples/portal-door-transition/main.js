@@ -66,6 +66,18 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.update();
 
+const controlsA = new OrbitControls(portalCameraA, renderer.domElement);
+controlsA.target.set(0, 0, 0);
+controlsA.enableDamping = true;
+controlsA.dampingFactor = 0.05;
+controlsA.enabled = false; // Start disabled
+
+const controlsB = new OrbitControls(portalCameraB, renderer.domElement);
+controlsB.target.set(0, 0, 0);
+controlsB.enableDamping = true;
+controlsB.dampingFactor = 0.05;
+controlsB.enabled = false; // Start disabled
+
 // ============================================================================
 // PostProcessing Setup with TSL
 // ============================================================================
@@ -347,6 +359,14 @@ function enterPortal(portal, doorGroup) {
     ...camTarget,
     onComplete: () => {
       isAnimating = false;
+      // Enable portal controls after transition
+      if (portal === "portalA") {
+        controls.enabled = false;
+        controlsA.enabled = true;
+      } else if (portal === "portalB") {
+        controls.enabled = false;
+        controlsB.enabled = true;
+      }
     },
   });
 }
@@ -355,6 +375,10 @@ function returnToMain() {
   if (cameraState === "main" || isAnimating) return;
 
   cameraState = "main";
+  // Disable portal controls
+  controlsA.enabled = false;
+  controlsB.enabled = false;
+
   animateCameraTo({
     position: defaultCameraPos,
     target: defaultCameraTarget,
@@ -436,6 +460,8 @@ renderer.setAnimationLoop(() => {
 
   // Update controls (only active when not animating)
   controls.update();
+  controlsA.update();
+  controlsB.update();
 
   // Render through PostProcessing
   postProcessing.render();
