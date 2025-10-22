@@ -1,8 +1,8 @@
 import atlasURL from "@videos/atlas-demo-3x.mp4";
 import buildxURL from "@videos/buildx-demo-5x.mp4";
-import diffuseURL from "@textures/plastered_stone_wall_diff_4k.jpg";
-import normalURL from "@textures/plastered_stone_wall_nor_gl_4k.exr";
-import roughnessURL from "@textures/plastered_stone_wall_rough_4k.exr";
+import diffuseURL from "@textures/plastered_stone_wall_diff_4k.jpg?url";
+import normalURL from "@textures/plastered_stone_wall_nor_gl_4k.exr?url";
+import roughnessURL from "@textures/plastered_stone_wall_rough_4k.exr?url";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { Inspector } from "three/addons/inspector/Inspector.js";

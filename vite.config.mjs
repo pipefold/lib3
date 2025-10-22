@@ -115,7 +115,7 @@ export default defineConfig(({ mode }) => {
       ],
       build: {
         // Keep examples output separate from the library build
-        outDir: "dist-examples",
+        outDir: "examples/dist",
         // Multi-page build config (dynamic inputs via glob)
         rollupOptions: {
           input: Object.fromEntries(
