@@ -90,6 +90,8 @@ export default defineConfig(({ mode }) => {
       alias: {
         "@pipefold/lib3": resolve(__dirname, "src/index.js"),
         "@videos": resolve(__dirname, "examples/assets/videos"),
+        "@textures": resolve(__dirname, "examples/assets/textures"),
+        "@assets": resolve(__dirname, "examples/assets"),
       },
     },
   };
