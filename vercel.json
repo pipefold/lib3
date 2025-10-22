@@ -1,0 +1,6 @@
+{
+  "buildCommand": "pnpm build:examples",
+  "outputDirectory": "examples/dist",
+  "framework": null,
+  "installCommand": "pnpm install"
+}

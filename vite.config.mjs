@@ -90,6 +90,8 @@ export default defineConfig(({ mode }) => {
       alias: {
         "@pipefold/lib3": resolve(__dirname, "src/index.js"),
         "@videos": resolve(__dirname, "examples/assets/videos"),
+        "@textures": resolve(__dirname, "examples/assets/textures"),
+        "@assets": resolve(__dirname, "examples/assets"),
       },
     },
   };
@@ -113,7 +115,7 @@ export default defineConfig(({ mode }) => {
       ],
       build: {
         // Keep examples output separate from the library build
-        outDir: "dist-examples",
+        outDir: "examples/dist",
         // Multi-page build config (dynamic inputs via glob)
         rollupOptions: {
           input: Object.fromEntries(

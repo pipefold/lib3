@@ -1,5 +1,8 @@
 import atlasURL from "@videos/atlas-demo-3x.mp4";
 import buildxURL from "@videos/buildx-demo-5x.mp4";
+import diffuseURL from "@textures/plastered_stone_wall_diff_4k.jpg?url";
+import normalURL from "@textures/plastered_stone_wall_nor_gl_4k.exr?url";
+import roughnessURL from "@textures/plastered_stone_wall_rough_4k.exr?url";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { Inspector } from "three/addons/inspector/Inspector.js";
@@ -77,7 +80,6 @@ scene.add(wall);
 
 // Apply plastered stone wall textures
 (() => {
-  const texBasePath = "../assets/textures/";
   const textureLoader = new THREE.TextureLoader();
   const exrLoader = new EXRLoader();
 
@@ -90,37 +92,28 @@ scene.add(wall);
   }
 
   // Albedo (sRGB)
-  textureLoader.load(
-    texBasePath + "plastered_stone_wall_diff_4k.jpg",
-    (map) => {
-      map.colorSpace = THREE.SRGBColorSpace;
-      setupTiling(map);
-      wall.material.map = map;
-      wall.material.needsUpdate = true;
-    }
-  );
+  textureLoader.load(diffuseURL, (map) => {
+    map.colorSpace = THREE.SRGBColorSpace;
+    setupTiling(map);
+    wall.material.map = map;
+    wall.material.needsUpdate = true;
+  });
 
   // Normal (linear EXR)
-  exrLoader.load(
-    texBasePath + "plastered_stone_wall_nor_gl_4k.exr",
-    (normalMap) => {
-      setupTiling(normalMap);
-      wall.material.normalMap = normalMap;
-      wall.material.normalScale = new THREE.Vector2(1, 1);
-      wall.material.needsUpdate = true;
-    }
-  );
+  exrLoader.load(normalURL, (normalMap) => {
+    setupTiling(normalMap);
+    wall.material.normalMap = normalMap;
+    wall.material.normalScale = new THREE.Vector2(1, 1);
+    wall.material.needsUpdate = true;
+  });
 
   // Roughness (linear EXR)
-  exrLoader.load(
-    texBasePath + "plastered_stone_wall_rough_4k.exr",
-    (roughnessMap) => {
-      setupTiling(roughnessMap);
-      wall.material.roughnessMap = roughnessMap;
-      wall.material.roughness = 1.0;
-      wall.material.needsUpdate = true;
-    }
-  );
+  exrLoader.load(roughnessURL, (roughnessMap) => {
+    setupTiling(roughnessMap);
+    wall.material.roughnessMap = roughnessMap;
+    wall.material.roughness = 1.0;
+    wall.material.needsUpdate = true;
+  });
 })();
 
 // Helpers for spatial orientation

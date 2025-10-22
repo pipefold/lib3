@@ -1,3 +1,4 @@
+import headURL from "@assets/head256x256x109.zip?url";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { unzipSync } from "three/addons/libs/fflate.module.js";
 import { texture3D, uniform } from "three/tsl";
@@ -24,7 +25,7 @@ new OrbitControls(camera, renderer.domElement);
 
 new THREE.FileLoader()
   .setResponseType("arraybuffer")
-  .load("../assets/head256x256x109.zip", async function (data) {
+  .load(headURL, async function (data) {
     const zip = unzipSync(new Uint8Array(data));
     const array = new Uint8Array(zip["head256x256x109"].buffer);
 
