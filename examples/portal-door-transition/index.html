@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Portal Door Transition - WebGPU + TSL</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100vh;
+      }
+      #instructions {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        color: white;
+        background: rgba(0, 0, 0, 0.6);
+        padding: 15px 20px;
+        border-radius: 8px;
+        font-size: 14px;
+        pointer-events: none;
+        backdrop-filter: blur(10px);
+      }
+      #instructions h3 {
+        margin: 0 0 10px 0;
+        font-size: 16px;
+        font-weight: 600;
+      }
+      #instructions p {
+        margin: 5px 0;
+        opacity: 0.9;
+      }
+    </style>
+    <script type="module" src="./main.js"></script>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+    <div id="instructions">
+      <h3>Portal Door Transition</h3>
+      <p>🖱️ Click on colored doors to enter portals</p>
+      <p>⌨️ Press ESC to return to main gallery</p>
+      <p>🔄 Drag to orbit camera (works in all scenes)</p>
+    </div>
+  </body>
+</html>
