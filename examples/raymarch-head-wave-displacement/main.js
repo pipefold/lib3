@@ -49,11 +49,12 @@ new THREE.FileLoader()
     storageTexture.name = "headWave";
 
     // Uniforms for wave compute
-    const waveAmplitude = uniform(0.5);
+    const waveAmplitude = uniform(1.32);
     const waveSpeed = uniform(2);
-    const noiseScale = uniform(0.64);
-    const noiseAmplitude = uniform(0.6);
-    const intensityScale = uniform(0.25);
+    const noiseScale = uniform(2.5);
+    const noiseAmplitude = uniform(1.22);
+    const intensityScale = uniform(0.22);
+    const displacementScale = uniform(0.01);
     const timeUniform = uniform(0.0);
     const phaseUniform = uniform(0.0);
 
@@ -68,6 +69,7 @@ new THREE.FileLoader()
       noiseScale,
       noiseAmplitude,
       intensityScale,
+      displacementScale,
       phase: phaseUniform,
     });
 
@@ -79,7 +81,7 @@ new THREE.FileLoader()
     await renderer.computeAsync(computeNode);
 
     const steps = uniform(4);
-    const intensityScaleView = uniform(0.2);
+    const intensityScaleView = uniform(1);
 
     const material = new THREE.NodeMaterial();
     material.colorNode = averageIntensityProjection({
@@ -100,6 +102,9 @@ new THREE.FileLoader()
     gui.add(waveSpeed, "value", 0.0, 5.0, 0.05).name("waveSpeed");
     gui.add(noiseScale, "value", 0.1, 4.0, 0.04).name("noiseScale");
     gui.add(noiseAmplitude, "value", 0.0, 2.0, 0.02).name("noiseAmplitude");
+    gui
+      .add(displacementScale, "value", 0.0, 0.2, 0.005)
+      .name("displacementScale");
     gui
       .add(intensityScale, "value", 0.0, 2.0, 0.02)
       .name("intensityScale (compute)");

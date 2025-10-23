@@ -128,6 +128,7 @@ export function buildSphericalWaveCopyKernel({
   noiseAmplitude = uniform(0.5),
   phase = uniform(0.0),
   intensityScale = uniform(1.0),
+  displacementScale = uniform(0.1),
 }) {
   return Fn(() => {
     const id = instanceIndex;
@@ -147,6 +148,7 @@ export function buildSphericalWaveCopyKernel({
       waveAmplitude,
       noiseScale,
       noiseAmplitude,
+      scale: displacementScale,
     });
 
     const s = sourceTextureNode.sample(displaced).r.mul(intensityScale);
