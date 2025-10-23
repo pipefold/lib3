@@ -1,6 +1,5 @@
 // vite.config.js (root - for library build + examples serve/build)
 import { defineConfig } from "vite";
-import threeUniformGui from "tsl-uniform-ui-vite-plugin";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import glob from "fast-glob"; // For dynamic example inputs
@@ -96,12 +95,7 @@ export default defineConfig(({ mode }) => {
     },
   };
 
-  const commonPlugins = [
-    // threeUniformGui({
-    //   persistent: false, // Saves tweaks to localStorage
-    //   devOnly: true, // Only in dev mode
-    // }),
-  ];
+  const commonPlugins = [];
 
   if (mode === "examples") {
     // Serve/build examples as multi-page app

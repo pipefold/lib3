@@ -41,13 +41,8 @@
   },
   "packageManager": "pnpm@10.15.0",
   "devDependencies": {
-    "@tweakpane/core": "^2.0.5",
-    "@tweakpane/plugin-essentials": "^0.2.1",
     "@types/three": "^0.180.0",
     "fast-glob": "^3.3.3",
-    "tsl-uniform-ui-vite-plugin": "bhushan6/tsl-Uniform-UI-Vite-Plugin#pull/1/head&path:package",
-    "tweakpane": "^4.0.5",
-    "tweakpane-plugin-file-import": "^1.1.1",
     "vite": "^7.1.5",
     "vite-plugin-dts": "^4.5.4"
   },

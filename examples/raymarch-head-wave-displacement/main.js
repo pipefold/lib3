@@ -1,5 +1,6 @@
 import headURL from "@assets/head256x256x109.zip?url";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { Inspector } from "three/addons/inspector/Inspector.js";
 import { unzipSync } from "three/addons/libs/fflate.module.js";
 import { texture3D, uniform } from "three/tsl";
 import {
@@ -21,6 +22,7 @@ const renderer = new THREE.WebGPURenderer({
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x000000);
+renderer.inspector = new Inspector();
 new OrbitControls(camera, renderer.domElement);
 
 new THREE.FileLoader()
@@ -47,15 +49,10 @@ new THREE.FileLoader()
     storageTexture.name = "headWave";
 
     // Uniforms for wave compute
-    // @range: { min: 0.0, max: 2.0, step: 0.02 }
     const waveAmplitude = uniform(0.5);
-    // @range: { min: 0.0, max: 5.0, step: 0.05 }
     const waveSpeed = uniform(2);
-    // @range: { min: 0.1, max: 4.0, step: 0.04 }
     const noiseScale = uniform(0.64);
-    // @range: { min: 0.0, max: 2.0, step: 0.02 }
     const noiseAmplitude = uniform(0.6);
-    // @range: { min: 0.0, max: 2.0, step: 0.02 }
     const intensityScale = uniform(0.25);
     const timeUniform = uniform(0.0);
     const phaseUniform = uniform(0.0);
@@ -81,9 +78,7 @@ new THREE.FileLoader()
     await renderer.init();
     await renderer.computeAsync(computeNode);
 
-    // @range: { min: 1, max: 5, step: 0.05 }
     const steps = uniform(4);
-    // @range: { min: 0.1, max: 5.0, step: 0.1 }
     const intensityScaleView = uniform(0.2);
 
     const material = new THREE.NodeMaterial();
@@ -98,6 +93,20 @@ new THREE.FileLoader()
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
     mesh.scale.set(1, -1, depth / width);
     scene.add(mesh);
+
+    // Inspector GUI
+    const gui = renderer.inspector.createParameters("Wave Displacement");
+    gui.add(waveAmplitude, "value", 0.0, 2.0, 0.02).name("waveAmplitude");
+    gui.add(waveSpeed, "value", 0.0, 5.0, 0.05).name("waveSpeed");
+    gui.add(noiseScale, "value", 0.1, 4.0, 0.04).name("noiseScale");
+    gui.add(noiseAmplitude, "value", 0.0, 2.0, 0.02).name("noiseAmplitude");
+    gui
+      .add(intensityScale, "value", 0.0, 2.0, 0.02)
+      .name("intensityScale (compute)");
+    gui.add(steps, "value", 1, 5, 0.05).name("steps");
+    gui
+      .add(intensityScaleView, "value", 0.1, 5.0, 0.1)
+      .name("intensityScale (view)");
 
     let lastTime = performance.now() * 0.001;
     let accum = 0;

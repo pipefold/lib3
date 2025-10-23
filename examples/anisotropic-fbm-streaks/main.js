@@ -1,4 +1,5 @@
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { Inspector } from "three/addons/inspector/Inspector.js";
 import {
   Fn,
   Loop,
@@ -32,7 +33,18 @@ const renderer = new THREE.WebGPURenderer({
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setClearColor(0x000000);
+renderer.inspector = new Inspector();
 new OrbitControls(camera, renderer.domElement);
+
+// Controls - define uniforms outside the shader function so Inspector can access them
+const scaleX = uniform(0.25);
+const scaleY = uniform(4.0);
+const integrateSamples = uniform(12);
+const ridgedSharpness = uniform(0.85);
+const warpStrength = uniform(0.15);
+const fbmLacunarity = uniform(2.0);
+const fbmGain = uniform(0.5);
+const animate = uniform(1);
 
 // TSL shader that generates anisotropic ridged fBm with vertical streak integration
 const streakTextureTSL = Fn(() => {
@@ -40,24 +52,6 @@ const streakTextureTSL = Fn(() => {
 
   // Aspect fix: scale X by aspect so isotropic base maps to screen space
   const aspect = float(window.innerWidth / window.innerHeight);
-
-  // Controls
-  // @range: { min: 0.1, max: 5.0, step: 0.1 }
-  const scaleX = uniform(0.25);
-  // @range: { min: 0.5, max: 10.0, step: 0.1 }
-  const scaleY = uniform(4.0);
-  // @range: { min: 1, max: 24, step: 1 }
-  const integrateSamples = uniform(12);
-  // @range: { min: 0.0, max: 1.0, step: 0.01 }
-  const ridgedSharpness = uniform(0.85);
-  // @range: { min: 0.0, max: 2.0, step: 0.01 }
-  const warpStrength = uniform(0.15);
-  // @range: { min: 0.1, max: 4.0, step: 0.1 }
-  const fbmLacunarity = uniform(2.0);
-  // @range: { min: 0.25, max: 1.0, step: 0.01 }
-  const fbmGain = uniform(0.5);
-  // @range: { min: 0, max: 1, step: 1 }
-  const animate = uniform(1);
 
   // Prepare anisotropic domain: stretch Y, compress X
   const baseP = vec3(
@@ -117,6 +111,17 @@ material.colorNode = streakTextureTSL();
 
 const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
 scene.add(mesh);
+
+// Inspector GUI
+const gui = renderer.inspector.createParameters("Anisotropic FBM Streaks");
+gui.add(scaleX, "value", 0.1, 5.0, 0.1).name("scaleX");
+gui.add(scaleY, "value", 0.5, 10.0, 0.1).name("scaleY");
+gui.add(integrateSamples, "value", 1, 24, 1).name("integrateSamples");
+gui.add(ridgedSharpness, "value", 0.0, 1.0, 0.01).name("ridgedSharpness");
+gui.add(warpStrength, "value", 0.0, 2.0, 0.01).name("warpStrength");
+gui.add(fbmLacunarity, "value", 0.1, 4.0, 0.1).name("fbmLacunarity");
+gui.add(fbmGain, "value", 0.25, 1.0, 0.01).name("fbmGain");
+gui.add(animate, "value", 0, 1, 1).name("animate");
 
 function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;

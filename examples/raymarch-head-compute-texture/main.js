@@ -1,5 +1,6 @@
 import headURL from "@assets/head256x256x109.zip?url";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { Inspector } from "three/addons/inspector/Inspector.js";
 import { unzipSync } from "three/addons/libs/fflate.module.js";
 import { RaymarchingBox } from "three/addons/tsl/utils/Raymarching.js";
 import {
@@ -27,6 +28,7 @@ const renderer = new THREE.WebGPURenderer({
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x000000);
+renderer.inspector = new Inspector();
 new OrbitControls(camera, renderer.domElement);
 new THREE.FileLoader()
   .setResponseType("arraybuffer")
@@ -110,9 +112,7 @@ new THREE.FileLoader()
       }
     );
 
-    // @range: { min: 1, max: 150, step: 1 }
     const steps = uniform(100);
-    // @range: { min: 0.1, max: 5.0, step: 0.1 }
     const intensityScale = uniform(2.0);
 
     const material = new THREE.NodeMaterial();
@@ -127,6 +127,11 @@ new THREE.FileLoader()
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
     mesh.scale.set(1, -1, depth / width);
     scene.add(mesh);
+
+    // Inspector GUI
+    const gui = renderer.inspector.createParameters("Raymarch Head (Compute)");
+    gui.add(steps, "value", 1, 150, 1).name("steps");
+    gui.add(intensityScale, "value", 0.1, 5.0, 0.1).name("intensityScale");
 
     function animate() {
       renderer.render(scene, camera);
