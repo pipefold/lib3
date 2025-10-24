@@ -1,3 +1,4 @@
+import { animate, utils } from "animejs";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { Inspector } from "three/addons/inspector/Inspector.js";
 import {
@@ -15,7 +16,6 @@ import {
 } from "three/tsl";
 import * as THREE from "three/webgpu";
 import { simplexNoise3 } from "../../src/index.js";
-import { animate, createTimeline, stagger, utils } from "animejs";
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -65,6 +65,16 @@ function computeInspectorWidth() {
   return Math.max(0, Math.min(500, full - 500));
 }
 
+function layoutTogglePosition() {
+  const panel = profiler.panel;
+  const inspectorWidth = computeInspectorWidth();
+  const isVisible = panel.classList.contains("visible");
+  // Keep FPS toggle always visible and above panel
+  profiler.toggleButton.style.zIndex = "1002";
+  profiler.toggleButton.style.right =
+    (isVisible ? inspectorWidth + 15 : 15) + "px";
+}
+
 function layoutWithInspector(open = true) {
   // Attach inspector shell to the same parent as the canvas if not already
   const shell = renderer.inspector.domElement;
@@ -85,10 +95,22 @@ function layoutWithInspector(open = true) {
 
   camera.aspect = canvasWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+
+  layoutTogglePosition();
 }
 
 // Initial layout: open inspector and size canvas accordingly
 layoutWithInspector(true);
+
+// Keep FPS button visible even when panel is open
+(() => {
+  const origToggle = profiler.togglePanel.bind(profiler);
+  profiler.togglePanel = () => {
+    origToggle();
+    profiler.toggleButton.classList.remove("hidden");
+    layoutTogglePosition();
+  };
+})();
 
 // Controls - define uniforms outside the shader function so Inspector can access them
 const scaleX = uniform(0.25);
