@@ -15,6 +15,7 @@ import {
 } from "three/tsl";
 import * as THREE from "three/webgpu";
 import { simplexNoise3 } from "../../src/index.js";
+import { animate, createTimeline, stagger, utils } from "animejs";
 
 // Scene setup
 const scene = new THREE.Scene();
@@ -44,7 +45,7 @@ const ridgedSharpness = uniform(0.85);
 const warpStrength = uniform(0.15);
 const fbmLacunarity = uniform(2.0);
 const fbmGain = uniform(0.5);
-const animate = uniform(1);
+const animate_shader = uniform(1);
 
 // TSL shader that generates anisotropic ridged fBm with vertical streak integration
 const streakTextureTSL = Fn(() => {
@@ -57,7 +58,7 @@ const streakTextureTSL = Fn(() => {
   const baseP = vec3(
     uv0.x.mul(scaleX).mul(aspect),
     uv0.y.mul(scaleY),
-    time.mul(animate.mul(0.1))
+    time.mul(animate_shader.mul(0.1))
   ).toVar();
 
   // Domain warp (mostly X) to introduce curvy drips and clumps
@@ -121,7 +122,375 @@ gui.add(ridgedSharpness, "value", 0.0, 1.0, 0.01).name("ridgedSharpness");
 gui.add(warpStrength, "value", 0.0, 2.0, 0.01).name("warpStrength");
 gui.add(fbmLacunarity, "value", 0.1, 4.0, 0.1).name("fbmLacunarity");
 gui.add(fbmGain, "value", 0.25, 1.0, 0.01).name("fbmGain");
-gui.add(animate, "value", 0, 1, 1).name("animate");
+gui.add(animate_shader, "value", 0, 1, 1).name("animate");
+
+// ═══════════════════════════════════════════════════════════════════
+// 🎼 ORCHESTRAL SYMPHONY OF PARAMETER ANIMATIONS
+// ═══════════════════════════════════════════════════════════════════
+
+// Helper to create a breathing oscillation
+function createBreathingPattern(
+  uniform,
+  min,
+  max,
+  duration,
+  easing = "inOutSine"
+) {
+  animate(uniform, {
+    value: [min, max, min],
+    duration: duration,
+    ease: easing,
+    loop: true,
+  });
+}
+
+// Helper to create evolving random walks
+function createOrganicWalk(uniform, min, max, baseDuration) {
+  const walk = () => {
+    const target = utils.random(min, max);
+    const duration = utils.random(baseDuration * 0.7, baseDuration * 1.3);
+    const easing = utils.randomPick([
+      "inOutSine",
+      "inOutQuad",
+      "inOutCubic",
+      "inOutExpo",
+    ]);
+
+    animate(uniform, {
+      value: target,
+      duration: duration,
+      ease: easing,
+      onComplete: walk,
+    });
+  };
+  walk();
+}
+
+// Helper to create harmonic oscillations (multiple frequencies)
+function createHarmonicOscillation(
+  uniform,
+  base,
+  amplitude,
+  fundamentalPeriod
+) {
+  const harmonics = {
+    value: 0,
+    harmonic1: 0,
+    harmonic2: 0,
+    harmonic3: 0,
+  };
+
+  // Fundamental frequency
+  animate(harmonics, {
+    harmonic1: [0, Math.PI * 2],
+    duration: fundamentalPeriod,
+    ease: "linear",
+    loop: true,
+  });
+
+  // 3rd harmonic (3x frequency)
+  animate(harmonics, {
+    harmonic2: [0, Math.PI * 2],
+    duration: fundamentalPeriod / 3,
+    ease: "linear",
+    loop: true,
+  });
+
+  // 5th harmonic (5x frequency)
+  animate(harmonics, {
+    harmonic3: [0, Math.PI * 2],
+    duration: fundamentalPeriod / 5,
+    ease: "linear",
+    loop: true,
+  });
+
+  // Composite waveform
+  const updateComposite = () => {
+    const wave1 = Math.sin(harmonics.harmonic1) * 1.0;
+    const wave2 = Math.sin(harmonics.harmonic2) * 0.3;
+    const wave3 = Math.sin(harmonics.harmonic3) * 0.15;
+    uniform.value = base + amplitude * (wave1 + wave2 + wave3);
+    requestAnimationFrame(updateComposite);
+  };
+  updateComposite();
+}
+
+// Helper to create chaotic modulation
+function createChaoticModulation(uniform, center, range) {
+  const chaos = { phase: 0, modDepth: 0 };
+
+  // Slowly varying modulation depth
+  animate(chaos, {
+    modDepth: [0, 1, 0],
+    duration: 15000,
+    ease: "inOutQuad",
+    loop: true,
+  });
+
+  // Fast chaotic phase
+  const modulatePhase = () => {
+    animate(chaos, {
+      phase: utils.random(-Math.PI, Math.PI),
+      duration: utils.random(300, 800),
+      ease: utils.randomPick(["inOutSine", "inOutQuad", "inOutCubic"]),
+      onComplete: modulatePhase,
+      onUpdate: () => {
+        uniform.value = center + Math.sin(chaos.phase) * range * chaos.modDepth;
+      },
+    });
+  };
+  modulatePhase();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 🎵 MOVEMENT 1: The Slow Dance - Scale Parameters
+// ═══════════════════════════════════════════════════════════════════
+// scaleX and scaleY perform a slow, breathing waltz
+// They move in counterpoint - when one expands, the other contracts
+
+const scalePhase = { x: 0, y: Math.PI }; // Start in counterpoint
+
+animate(scalePhase, {
+  x: [0, Math.PI * 8], // Many cycles
+  y: [Math.PI, Math.PI * 9],
+  duration: 60000, // 1 minute full cycle
+  ease: "linear",
+  loop: true,
+  onUpdate: () => {
+    // scaleX: 0.1 to 2.0 with secondary modulation
+    scaleX.value =
+      0.8 + 0.7 * Math.sin(scalePhase.x) + 0.3 * Math.sin(scalePhase.x * 3);
+
+    // scaleY: inverse relationship, 2.0 to 8.0
+    scaleY.value =
+      5.0 + 3.0 * Math.cos(scalePhase.y) + 1.0 * Math.cos(scalePhase.y * 2);
+  },
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// 🎵 MOVEMENT 2: The Pulse - Ridged Sharpness
+// ═══════════════════════════════════════════════════════════════════
+// Sharp, rhythmic pulses that occasionally break into irregular patterns
+
+let pulseMode = "regular";
+const pulseState = { value: 0.85, intensity: 0 };
+
+const switchPulseMode = () => {
+  pulseMode = utils.random(0, 1) > 0.7 ? "irregular" : "regular";
+
+  if (pulseMode === "regular") {
+    // Regular breathing pulse
+    animate(pulseState, {
+      value: [0.3, 0.95, 0.3],
+      duration: 8000,
+      ease: "inOutCubic",
+      onUpdate: () => {
+        ridgedSharpness.value = pulseState.value;
+      },
+      onComplete: switchPulseMode,
+    });
+  } else {
+    // Irregular staccato bursts
+    const burstCount = Math.floor(utils.random(3, 8));
+    let burstsDone = 0;
+
+    const doBurst = () => {
+      const target = utils.random(0.2, 0.98);
+      animate(pulseState, {
+        value: target,
+        duration: utils.random(400, 1200),
+        ease: utils.randomPick([
+          "inOutQuad",
+          "outElastic(1, .5)",
+          "inOutBack(2)",
+        ]),
+        onUpdate: () => {
+          ridgedSharpness.value = pulseState.value;
+        },
+        onComplete: () => {
+          burstsDone++;
+          if (burstsDone < burstCount) doBurst();
+          else switchPulseMode();
+        },
+      });
+    };
+    doBurst();
+  }
+};
+switchPulseMode();
+
+// ═══════════════════════════════════════════════════════════════════
+// 🎵 MOVEMENT 3: The Shimmer - Warp Strength
+// ═══════════════════════════════════════════════════════════════════
+// High frequency tremolo with slow amplitude modulation
+
+const warpOsc = {
+  phase: 0,
+  amplitude: 0.5,
+  frequency: 1.0,
+};
+
+// Fast oscillation
+animate(warpOsc, {
+  phase: [0, Math.PI * 40], // Many fast cycles
+  duration: 20000,
+  ease: "linear",
+  loop: true,
+});
+
+// Slow amplitude breathing
+animate(warpOsc, {
+  amplitude: [0.2, 1.2, 0.2],
+  duration: 25000,
+  ease: "inOutQuad",
+  loop: true,
+});
+
+// Frequency variation for shimmer
+animate(warpOsc, {
+  frequency: [0.8, 1.5, 0.8],
+  duration: 18000,
+  ease: "inOutSine",
+  loop: true,
+});
+
+// Composite update
+const updateWarp = () => {
+  warpStrength.value =
+    0.5 +
+    0.4 * Math.sin(warpOsc.phase * warpOsc.frequency) * warpOsc.amplitude +
+    0.15 * Math.sin(warpOsc.phase * 2.7) * (1 - warpOsc.amplitude * 0.3);
+  requestAnimationFrame(updateWarp);
+};
+updateWarp();
+
+// ═══════════════════════════════════════════════════════════════════
+// 🎵 MOVEMENT 4: The Journey - FBM Parameters
+// ═══════════════════════════════════════════════════════════════════
+// Lacunarity and Gain explore parameter space together
+// Creating evolving fractal textures
+
+const fbmJourney = {
+  lacunarity: 2.0,
+  gain: 0.5,
+  phase: 0,
+  chaosFactor: 0,
+};
+
+// Main journey - circular path through parameter space
+animate(fbmJourney, {
+  phase: [0, Math.PI * 2],
+  duration: 45000,
+  ease: "linear",
+  loop: true,
+});
+
+// Chaos injection - occasional disturbances
+const injectChaos = () => {
+  animate(fbmJourney, {
+    chaosFactor: [0, utils.random(0.3, 0.7), 0],
+    duration: utils.random(3000, 7000),
+    ease: "inOutSine",
+    onComplete: () => {
+      setTimeout(injectChaos, utils.random(5000, 15000));
+    },
+  });
+};
+injectChaos();
+
+// Update FBM parameters
+const updateFBM = () => {
+  // Lissajous-like curves for interesting paths
+  const lacBase = 2.0 + 1.0 * Math.sin(fbmJourney.phase);
+  const lacChaos = utils.random(-0.5, 0.5) * fbmJourney.chaosFactor;
+  fbmLacunarity.value = Math.max(0.5, Math.min(3.5, lacBase + lacChaos));
+
+  const gainBase = 0.5 + 0.3 * Math.cos(fbmJourney.phase * 1.618); // Golden ratio
+  const gainChaos = utils.random(-0.2, 0.2) * fbmJourney.chaosFactor;
+  fbmGain.value = Math.max(0.25, Math.min(0.95, gainBase + gainChaos));
+
+  requestAnimationFrame(updateFBM);
+};
+updateFBM();
+
+// ═══════════════════════════════════════════════════════════════════
+// 🎵 MOVEMENT 5: The Cascade - Integrate Samples
+// ═══════════════════════════════════════════════════════════════════
+// Steps up and down in discrete rhythms, sometimes smooth, sometimes jagged
+
+let cascadeDirection = 1;
+const cascadeState = { value: 12 };
+
+const doCascade = () => {
+  const isSmooth = utils.random(0, 1) > 0.5;
+  const steps = Math.floor(utils.random(2, 6));
+
+  if (isSmooth) {
+    // Smooth glide
+    const target =
+      cascadeDirection > 0 ? utils.random(16, 24) : utils.random(3, 10);
+
+    animate(cascadeState, {
+      value: target,
+      duration: utils.random(5000, 10000),
+      ease: "inOutQuad",
+      onUpdate: () => {
+        integrateSamples.value = Math.round(cascadeState.value);
+      },
+      onComplete: () => {
+        cascadeDirection *= -1;
+        setTimeout(doCascade, utils.random(2000, 5000));
+      },
+    });
+  } else {
+    // Stepwise cascade
+    let stepsDone = 0;
+    const doStep = () => {
+      const delta = cascadeDirection * utils.random(2, 5);
+      cascadeState.value = Math.max(
+        2,
+        Math.min(24, cascadeState.value + delta)
+      );
+
+      animate(cascadeState, {
+        value: cascadeState.value,
+        duration: utils.random(800, 1500),
+        ease: utils.randomPick(["inQuad", "outQuad", "linear"]),
+        onUpdate: () => {
+          integrateSamples.value = Math.round(cascadeState.value);
+        },
+        onComplete: () => {
+          stepsDone++;
+          if (stepsDone < steps) {
+            setTimeout(doStep, utils.random(200, 600));
+          } else {
+            cascadeDirection *= -1;
+            setTimeout(doCascade, utils.random(3000, 7000));
+          }
+        },
+      });
+    };
+    doStep();
+  }
+};
+setTimeout(doCascade, 2000);
+
+// ═══════════════════════════════════════════════════════════════════
+// 🎼 MAESTRO - Global tempo variations
+// ═══════════════════════════════════════════════════════════════════
+// Occasionally speeds up or slows down the perception of change
+
+console.log("🎼 Symphony initialized - watch the parameters dance in harmony");
+console.log("🎵 Movements:");
+console.log("  1. The Slow Dance (scaleX, scaleY) - counterpoint breathing");
+console.log("  2. The Pulse (ridgedSharpness) - regular/irregular rhythms");
+console.log("  3. The Shimmer (warpStrength) - high frequency tremolo");
+console.log(
+  "  4. The Journey (fbmLacunarity, fbmGain) - exploring parameter space"
+);
+console.log("  5. The Cascade (integrateSamples) - discrete rhythmic steps");
+
+// ═══════════════════════════════════════════════════════════════════
 
 function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
