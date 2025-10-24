@@ -37,6 +37,59 @@ renderer.setClearColor(0x000000);
 renderer.inspector = new Inspector();
 new OrbitControls(camera, renderer.domElement);
 
+// Inspector: open by default and dock to the right with dynamic width
+// - Panel width: up to 500px, but leave at least 500px for the canvas
+// - Applies on load and resize
+const profiler = renderer.inspector.profiler;
+
+// Inject CSS overrides to dock the inspector to the right side
+(() => {
+  const style = document.createElement("style");
+  style.textContent = `
+    #profiler-panel {
+      top: 0; bottom: 0; right: 0; left: auto;
+      width: 360px; height: auto;
+      transform: translateX(100%);
+      border-top: none;
+      border-left: 2px solid var(--profiler-border);
+    }
+    #profiler-panel.visible { transform: translateX(0); }
+    .panel-resizer { display: none; }
+  `;
+  document.head.appendChild(style);
+})();
+
+function computeInspectorWidth() {
+  const full = window.innerWidth;
+  // Ensure at least 500px for canvas; inspector max 500px
+  return Math.max(0, Math.min(500, full - 500));
+}
+
+function layoutWithInspector(open = true) {
+  // Attach inspector shell to the same parent as the canvas if not already
+  const shell = renderer.inspector.domElement;
+  const parent = renderer.domElement.parentElement || document.body;
+  if (shell.parentElement === null) parent.appendChild(shell);
+
+  const panel = profiler.panel;
+  const inspectorWidth = computeInspectorWidth();
+
+  // Open panel by default
+  if (open) panel.classList.add("visible");
+
+  panel.style.width = inspectorWidth + "px";
+
+  const canvasWidth = Math.max(1, window.innerWidth - inspectorWidth);
+  renderer.domElement.style.width = canvasWidth + "px";
+  renderer.setSize(canvasWidth, window.innerHeight);
+
+  camera.aspect = canvasWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+}
+
+// Initial layout: open inspector and size canvas accordingly
+layoutWithInspector(true);
+
 // Controls - define uniforms outside the shader function so Inspector can access them
 const scaleX = uniform(0.25);
 const scaleY = uniform(4.0);
@@ -496,9 +549,7 @@ console.log("  5. The Cascade (integrateSamples) - discrete rhythmic steps");
 // ═══════════════════════════════════════════════════════════════════
 
 function onResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  layoutWithInspector(false);
 }
 window.addEventListener("resize", onResize);
 
