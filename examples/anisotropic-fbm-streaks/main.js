@@ -113,15 +113,18 @@ material.colorNode = streakTextureTSL();
 const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
 scene.add(mesh);
 
-// Inspector GUI
-const gui = renderer.inspector.createParameters("Anisotropic FBM Streaks");
-gui.add(scaleX, "value", 0.1, 5.0, 0.1).name("scaleX");
-gui.add(scaleY, "value", 0.5, 10.0, 0.1).name("scaleY");
-gui.add(integrateSamples, "value", 1, 24, 1).name("integrateSamples");
-gui.add(ridgedSharpness, "value", 0.0, 1.0, 0.01).name("ridgedSharpness");
-gui.add(warpStrength, "value", 0.0, 2.0, 0.01).name("warpStrength");
-gui.add(fbmLacunarity, "value", 0.1, 4.0, 0.1).name("fbmLacunarity");
-gui.add(fbmGain, "value", 0.25, 1.0, 0.01).name("fbmGain");
+// Inspector GUI with live updates - .listen() makes them track animated values!
+const gui = renderer.inspector.createParameters("🎼 Orchestral Symphony");
+gui.add(scaleX, "value", 0.1, 5.0, 0.1).name("scaleX").listen();
+gui.add(scaleY, "value", 0.5, 10.0, 0.1).name("scaleY").listen();
+gui.add(integrateSamples, "value", 1, 24, 1).name("integrateSamples").listen();
+gui
+  .add(ridgedSharpness, "value", 0.0, 1.0, 0.01)
+  .name("ridgedSharpness")
+  .listen();
+gui.add(warpStrength, "value", 0.0, 2.0, 0.01).name("warpStrength").listen();
+gui.add(fbmLacunarity, "value", 0.1, 4.0, 0.1).name("fbmLacunarity").listen();
+gui.add(fbmGain, "value", 0.25, 1.0, 0.01).name("fbmGain").listen();
 gui.add(animate_shader, "value", 0, 1, 1).name("animate");
 
 // ═══════════════════════════════════════════════════════════════════
