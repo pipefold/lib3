@@ -136,6 +136,7 @@ export default defineConfig(({ mode }) => {
             index: resolve(__dirname, "src/index.js"),
             waves: resolve(__dirname, "src/waves.js"),
             knotMorph: resolve(__dirname, "src/knotMorph.js"),
+            sdf: resolve(__dirname, "src/sdf.js"),
           },
           formats: ["es"],
         },
