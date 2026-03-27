@@ -102,6 +102,7 @@ export default defineConfig(({ mode }) => {
     return {
       ...common,
       appType: "mpa",
+    server: { allowedHosts: true },
       plugins: [
         ...commonPlugins,
         examplesIndexPlugin(),

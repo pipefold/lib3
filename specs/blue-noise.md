@@ -1,0 +1,167 @@
+# ComputeMipAwareBlueNoise — Clean-Room Specification
+
+## 1. Public API
+
+### Constructor
+
+```ts
+class ComputeMipAwareBlueNoise {
+  constructor(width?: number, height?: number, mipScaleExponent?: number);
+}
+```
+
+| Parameter          | Type     | Default | Description |
+|--------------------|----------|---------|-------------|
+| `width`            | `number` | `128`   | Texture width in pixels. Should be a power of two. |
+| `height`           | `number` | `128`   | Texture height in pixels. Should be a power of two. |
+| `mipScaleExponent` | `number` | `1.0`   | Controls how noise coordinate scaling changes across mip levels. `1.0` = standard (frequency doubles per level); `0.5` = slower scaling, preserving larger structures. |
+
+The constructor stores parameters and sets `storageTexture = null`. No GPU work happens here.
+
+### `init(renderer: WebGPURenderer): StorageTexture`
+
+Performs all GPU compute work synchronously (each `renderer.compute()` call is dispatched in sequence). Returns the fully-populated `THREE.StorageTexture` with all mip levels written.
+
+Despite the source returning the texture synchronously, consumer code `await`s the result (harmless — a non-Promise awaited simply resolves immediately, or the renderer.compute may return a promise in newer Three.js versions). Implementors should match the original: return the texture directly.
+
+### `getTexture(): StorageTexture | null`
+
+Returns the generated texture, or `null` if `init()` has not been called.
+
+---
+
+## 2. Texture Format
+
+| Property              | Value |
+|-----------------------|-------|
+| **Type**              | `THREE.StorageTexture` |
+| **Dimensions**        | `width × height` (as passed to constructor) |
+| **Pixel format**      | Default StorageTexture format (RGBA8, written as `vec4(v, v, v, 1.0)` — grayscale in RGB, alpha = 1) |
+| **Color space**       | `LinearSRGBColorSpace` |
+| **Min filter**        | `LinearMipmapNearestFilter` (trilinear within a level, nearest between levels) |
+| **Mag filter**        | `LinearFilter` |
+| **Wrap S / Wrap T**   | `RepeatWrapping` |
+| **Mipmaps**           | `generateMipmaps = true`, `manualMipmaps = true` — the class writes each mip level explicitly via compute shaders; the GPU does NOT auto-generate them. |
+| **Mip level count**   | `1 + floor(log2(max(width, height)))` — full mip chain down to 1×1. |
+
+---
+
+## 3. Algorithm
+
+The blue noise is generated procedurally on the GPU. There is **no precomputed LUT**. It uses a **Hilbert-curve R1 low-discrepancy sequence**.
+
+### 3.1 Core: Hilbert R1 Blue Noise (per-pixel function)
+
+Given an integer 2D coordinate `p` and an integer `level` (Hilbert curve recursion depth):
+
+1. **Hilbert index**: Map `p = (x, y)` to a 1D index `d` via the standard Hilbert curve algorithm at the given recursion `level`:
+   ```
+   d = 0
+   for i in 0..level:
+     n = level - i - 1
+     rx = (x >> n) & 1
+     ry = (y >> n) & 1
+     d += ((3 * rx) ^ ry) << (2 * n)
+     if ry == 0:
+       if rx == 1:
+         p = (1 << n) - 1 - p   // reflect both components
+       p = (p.y, p.x)            // transpose
+   ```
+
+2. **Knuth multiplicative hash (R1 sequence)**: Apply the hash `h(x) = 0x80000000 + 2654435789 * x` to the Hilbert index `d`. The constant `2654435789 ≈ φ⁻¹ · 2³²` is derived from the golden ratio, producing an additive recurrence (R1 sequence) that has optimal gap distribution.
+
+3. **Normalize**: Divide by `2³² = 4294967296.0` to get a `float` in `[0, 1)`.
+
+The result: spatially adjacent pixels (in Hilbert-curve order) receive maximally-spaced values (due to the R1 sequence property), which produces a blue-noise spectral distribution.
+
+### 3.2 Per-Mip-Level Compute Dispatch
+
+For each mip level `L` from `0` to `mipCount - 1`:
+
+1. **Compute mip dimensions**:
+   ```
+   mipWidth  = max(1, floor(width  / 2^L))
+   mipHeight = max(1, floor(height / 2^L))
+   ```
+
+2. **Compute coordinate scale factor**:
+   ```
+   scale = 2^((1 - mipScaleExponent) * L)
+   ```
+   - When `mipScaleExponent = 1.0`: `scale = 1.0` for all levels (no scaling).
+   - When `mipScaleExponent = 0.5`: `scale = 2^(0.5 * L)` — coordinates grow with √2 per level.
+   - When `mipScaleExponent = 0.0`: `scale = 2^L` — coordinates scale 1:1 with mip reduction.
+
+3. **Compute Hilbert recursion level**:
+   ```
+   effectiveSize = max(mipWidth, mipHeight) * scale
+   hilbertLevel  = max(1, ceil(log2(max(1, effectiveSize))))
+   ```
+   This ensures the Hilbert curve covers the effective coordinate range.
+
+4. **Dispatch compute shader** with `mipWidth * mipHeight` invocations. Each invocation:
+   - Derives pixel coords: `x = instanceIndex % mipWidth`, `y = instanceIndex / mipWidth`
+   - Scales to Hilbert input coords: `p = ivec2(vec2(x, y) * scale)`
+   - Evaluates: `v = hilbert_r1_blue_noisef(p, hilbertLevel)`
+   - Writes: `textureStore(storageTexture, uvec2(x,y), vec4(v, v, v, 1.0))` at mip level `L`
+
+---
+
+## 4. What "Mip-Aware" Means
+
+Standard mipmaps are generated by downsampling the base level (e.g., box filter averaging). For blue noise, this is **destructive** — averaging blue noise pixels produces gray mush (white noise or DC bias), destroying the carefully-constructed spectral properties.
+
+**Mip-aware generation** means each mip level is independently computed with its own blue noise pattern via the Hilbert R1 algorithm, rather than being derived from the level above. Every mip level independently has a blue-noise spectral distribution.
+
+The `mipScaleExponent` parameter controls how the input coordinate space scales across levels:
+
+- **`mipScaleExponent = 1.0` (default)**: `scale = 1` at all levels. Each mip level's pixel `(x,y)` maps directly to Hilbert coordinate `(x,y)`. The noise pattern at coarser mips is simply the top-left corner of the base pattern, recomputed at the appropriate Hilbert recursion depth.
+
+- **`mipScaleExponent < 1.0`**: Input coordinates are multiplied by an increasing scale factor at coarser mip levels. This stretches the Hilbert curve sampling, changing which part of the R1 sequence each pixel reads. The effect is that coarser mip levels sample a wider coordinate range, producing different noise patterns that may better preserve the appearance of uniform coverage when the texture is viewed at reduced resolution.
+
+- **`mipScaleExponent = 0.0`**: Coordinates scale by `2^L`, fully compensating for the mip size reduction — every mip level addresses the same effective coordinate range as the base.
+
+The texture is configured with `LinearMipmapNearestFilter`, meaning the GPU selects the **nearest** mip level (no blending between levels) and applies **bilinear** filtering within that level. This avoids cross-mip blending that would corrupt the blue-noise spectrum.
+
+---
+
+## 5. Usage Pattern (Downstream Consumption)
+
+In `VolumeSmokeNodeMaterial`, the blue noise texture is sampled for **ray march jittering**:
+
+```glsl
+// Derive screen UV from world position (not fragment UV)
+screenUV = positionWorld.xy * 0.5 + 0.5;
+
+// Sample blue noise, tiling 4× across screen
+jitter = blueNoiseTex.sample(screenUV * 4.0).x;    // red channel, [0..1)
+
+// On first ray-march step only, offset the ray position
+if (stepIndex == 0)
+  jitteredPosition = positionRay + jitter * stepSize * 0.5;
+else
+  jitteredPosition = positionRay;
+```
+
+**Key details:**
+
+- The texture is sampled as a **2D texture** using `texture()` (TSL `sample()`), not `textureLoad`. This means filtering and mipmapping are active.
+- UV coordinates are derived from **world-space position** projected to `[0,1]`, NOT from mesh UVs. This produces screen-coherent jitter.
+- The UV is multiplied by `4.0`, tiling the 128×128 texture 4 times across the surface. With `RepeatWrapping`, this is seamless.
+- Only the **red channel** (`.x`) is read. Since all four channels are `(v, v, v, 1)`, any RGB channel works.
+- The jitter is applied only to the **first step** of the ray march, offsetting it by up to half a step size. This breaks up banding artifacts from uniform step spacing without biasing the integral.
+
+**Wrap/filter settings ensure:**
+- `RepeatWrapping` — seamless tiling when UV × 4 exceeds [0,1].
+- `LinearFilter` (mag) — smooth interpolation when the texture is magnified.
+- `LinearMipmapNearestFilter` (min) — when minified, a coarser mip level (with its own independent blue noise) is selected, preserving noise quality at all viewing distances.
+
+---
+
+## 6. Summary of Constants
+
+| Constant | Value | Origin |
+|----------|-------|--------|
+| Knuth hash offset | `0x80000000` (2147483648) | Shifts range to unsigned |
+| Knuth hash multiplier | `2654435789` | `≈ 2³² / φ` where `φ = (1+√5)/2` — golden ratio R1 sequence |
+| Normalization divisor | `4294967296.0` | `2³²` — maps `u32` to `[0, 1)` |
