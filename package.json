@@ -15,6 +15,9 @@
     },
     "./knotMorph": {
       "import": "./dist/knotMorph.js"
+    },
+    "./thunder": {
+      "import": "./dist/thunder.js"
     }
   },
   "publishConfig": {

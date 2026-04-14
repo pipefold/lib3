@@ -137,6 +137,7 @@ export default defineConfig(({ mode }) => {
             index: resolve(__dirname, "src/index.js"),
             waves: resolve(__dirname, "src/waves.js"),
             knotMorph: resolve(__dirname, "src/knotMorph.js"),
+            thunder: resolve(__dirname, "src/thunder.js"),
           },
           formats: ["es"],
         },

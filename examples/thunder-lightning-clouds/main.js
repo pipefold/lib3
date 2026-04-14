@@ -6,13 +6,13 @@
  * All @three-blocks/core dependencies replaced with clean-room lib3 implementations.
  */
 import * as THREE from 'three/webgpu';
-import { texture3D, uniform, Fn, float, vec3, vec4, If, Break, smoothstep } from 'three/tsl';
+import { uniform, vec4 } from 'three/tsl';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { RaymarchingBox } from 'three/addons/tsl/utils/Raymarching.js';
 
 import { SmokeVolume } from '../../src/fluidSim.js';
 import { VolumeSmokeNodeMaterial } from '../../src/smokeMaterial.js';
 import { ComputeMipAwareBlueNoise } from '../../src/blueNoise.js';
+import { createThunderNode, createThunderStateMachine } from '../../src/thunder.js';
 
 const container = document.getElementById('container');
 const errorEl = document.getElementById('error');
@@ -99,113 +99,18 @@ async function init() {
   });
 
   // ---- Thunder node ----
-  const thunderTime = uniform(0);
-  const thunderCharge = uniform(0.18);
-  const thunderFlash = uniform(0);
-  const thunderFlashCenter = uniform(new THREE.Vector3(0.5, 0.5, 0.5), 'vec3');
-  const thunderFlashRadius = uniform(0.13);
-  const thunderBaseGlow = uniform(0.72);
-  const thunderFlashGain = uniform(4.6);
-  const thunderOutputGain = uniform(1.28);
-  const thunderConfinement = uniform(1.3);
-  const thunderShellRadius = uniform(0.46);
-  const thunderShellSoftness = uniform(0.08);
-  const thunderFilamentScale = uniform(31.0);
-  const thunderFilamentSharpness = uniform(0.84);
-  const thunderArcDrift = uniform(0.5);
-  const thunderAbsorption = uniform(12.4);
-  const thunderSteps = uniform(128);
-  const thunderColorCold = uniform(new THREE.Color(0x3569ff));
-  const thunderColorHot = uniform(new THREE.Color(0xf2f8ff));
-  const thunderDensityTexture = texture3D(fluid.getDensityTexture3D(), null, 0);
-  const thunderPressureTexture = texture3D(fluid.getPressureTexture3D(), null, 0);
-  const thunderCurlTexture = texture3D(fluid.getCurlTexture3D(), null, 0);
+  const { node: thunderNode, uniforms: thunderUniforms } = createThunderNode({
+    densityTexture: fluid.getDensityTexture3D(),
+    pressureTexture: fluid.getPressureTexture3D(),
+    curlTexture: fluid.getCurlTexture3D(),
+  });
 
-  const thunderNode = Fn(() => {
-    const thunderAccum = vec3(0).toVar();
-    const thunderAlpha = float(0).toVar();
-    const transmittance = float(1).toVar();
-    const invSteps = float(1).div(thunderSteps).toVar();
-    const luma = vec3(0.299, 0.587, 0.114).toConst('thunderLuma');
-
-    RaymarchingBox(thunderSteps, ({ positionRay }) => {
-      const uvw = positionRay.add(0.5).saturate().toVar('thunderUVW');
-      const density = thunderDensityTexture.sample(uvw).rgb.dot(luma).saturate().toVar('thunderDensity');
-
-      If(density.greaterThan(0.002), () => {
-        const pressure = thunderPressureTexture.sample(uvw).x.abs().saturate().toVar();
-        const curl = thunderCurlTexture.sample(uvw).xyz.length().saturate().toVar();
-        const radial = uvw.sub(0.5).length().toVar();
-
-        const shellInner = thunderShellRadius.sub(thunderShellSoftness.mul(1.95));
-        const cocoonMask = float(1).sub(
-          smoothstep(shellInner, thunderShellRadius.add(thunderShellSoftness), radial)
-        ).toVar();
-        const shellBand = smoothstep(
-          shellInner, thunderShellRadius.sub(thunderShellSoftness.mul(0.24)), radial
-        ).mul(
-          float(1).sub(smoothstep(
-            thunderShellRadius.sub(thunderShellSoftness.mul(0.08)),
-            thunderShellRadius.add(thunderShellSoftness), radial
-          ))
-        ).saturate().toVar();
-        const coreMask = float(1).sub(
-          smoothstep(thunderShellRadius.mul(0.32), thunderShellRadius.mul(0.88), radial)
-        ).toVar();
-
-        const linePhase = uvw.x.mul(thunderFilamentScale)
-          .add(uvw.y.mul(thunderFilamentScale.mul(1.31)))
-          .add(uvw.z.mul(thunderFilamentScale.mul(1.87)))
-          .add(thunderTime.mul(thunderArcDrift.mul(6)))
-          .add(pressure.mul(8))
-          .add(curl.mul(5))
-          .toVar();
-        const lineField = linePhase.sin().mul(0.5).add(0.5).toVar();
-        const filament = smoothstep(
-          thunderFilamentSharpness, float(1),
-          lineField.add(pressure.mul(0.55)).add(curl.mul(0.35)).saturate()
-        ).toVar();
-
-        const hotspotDist = uvw.sub(thunderFlashCenter).length().toVar();
-        const hotspot = float(1).sub(
-          smoothstep(thunderFlashRadius, thunderFlashRadius.add(thunderShellSoftness), hotspotDist)
-        ).toVar();
-
-        const potential = density.pow(1.34).mul(cocoonMask).mul(thunderConfinement).toVar();
-        const tension = coreMask.mul(0.82).add(shellBand.mul(0.48)).add(pressure.mul(0.56)).add(0.2).toVar();
-        const dischargeMask = shellBand.mul(0.72).add(coreMask.mul(0.2)).add(hotspot.mul(0.45)).saturate().toVar();
-        const chargeGlow = potential.mul(thunderCharge).mul(thunderBaseGlow).mul(tension).toVar();
-        const burstGlow = potential.mul(thunderFlash).mul(thunderFlashGain)
-          .mul(filament.mul(0.82).add(hotspot.mul(1.25)))
-          .mul(dischargeMask).toVar();
-        const emission = chargeGlow.add(burstGlow).toVar();
-        const emissionAlpha = emission.mul(invSteps).mul(transmittance).saturate().toVar();
-
-        const flashWeight = hotspot.mul(thunderFlash).add(filament.mul(0.34)).add(shellBand.mul(0.24)).saturate().toVar();
-        const thunderTint = thunderColorCold.mix(thunderColorHot, flashWeight).toVar();
-
-        thunderAccum.addAssign(emissionAlpha.mul(thunderTint));
-        thunderAlpha.addAssign(emissionAlpha);
-
-        const localAbsorption = density.mul(thunderAbsorption)
-          .mul(cocoonMask.mul(0.75).add(0.25))
-          .mul(invSteps)
-          .negate()
-          .exp()
-          .toVar();
-        transmittance.mulAssign(localAbsorption);
-
-        If(thunderAlpha.greaterThan(0.985), () => { Break(); });
-      });
-    });
-
-    return vec4(thunderAccum.saturate(), thunderAlpha.saturate());
-  })();
+  const thunder = createThunderStateMachine(thunderUniforms);
 
   // ---- Composite smoke + thunder ----
   const smokeNode = material.getSmokeNode();
   material.outputNode = vec4(
-    smokeNode.rgb.add(thunderNode.rgb.mul(thunderOutputGain)),
+    smokeNode.rgb.add(thunderNode.rgb.mul(thunderUniforms.outputGain)),
     smokeNode.a
   );
   material.needsUpdate = true;
@@ -255,60 +160,6 @@ async function init() {
   renderer.domElement.addEventListener('pointerup', onPointerStop);
   renderer.domElement.addEventListener('pointerleave', onPointerStop);
 
-  // ---- Thunder state machine ----
-  const thunderRuntime = {
-    charge: 0.18, burst: 0, cooldown: 0,
-    flickerFreq: 33, microFreq: 17, pulseFreq: 0.41,
-    dir: new THREE.Vector3(),
-  };
-  const cfg = {
-    chargeRate: 0.17, dischargeThreshold: 0.7, flashChance: 4.2,
-    burstDecay: 6.6, cooldownMin: 0.06, cooldownMax: 0.26,
-  };
-
-  function triggerFlash() {
-    const d = thunderRuntime.dir.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5);
-    if (d.lengthSq() < 1e-4) d.set(1, 0, 0); else d.normalize();
-    const inner = Math.max(0.07, thunderShellRadius.value - thunderShellSoftness.value * 2.3);
-    const outer = Math.max(inner + 0.01, thunderShellRadius.value * 0.95);
-    const r = inner + Math.random() * (outer - inner);
-    thunderFlashCenter.value.set(
-      THREE.MathUtils.clamp(0.5 + d.x * r, 0.03, 0.97),
-      THREE.MathUtils.clamp(0.5 + d.y * r, 0.03, 0.97),
-      THREE.MathUtils.clamp(0.5 + d.z * r, 0.03, 0.97)
-    );
-    thunderFlashRadius.value = 0.13 * (0.5 + Math.random() * 0.55);
-    thunderRuntime.burst = 1.05 + Math.random() * 1.25;
-    thunderRuntime.charge *= 0.34 + Math.random() * 0.22;
-    thunderRuntime.flickerFreq = 26 + Math.random() * 22;
-    thunderRuntime.microFreq = 10 + Math.random() * 20;
-    thunderRuntime.cooldown = cfg.cooldownMin + Math.random() * (cfg.cooldownMax - cfg.cooldownMin);
-  }
-
-  function updateThunder(dt) {
-    thunderTime.value += dt;
-    const pulse = 0.5 + 0.5 * Math.sin(thunderTime.value * thunderRuntime.pulseFreq * Math.PI * 2);
-    const brew = 0.62 + Math.pow(pulse, 1.7) * 0.75;
-    thunderRuntime.charge = Math.min(1, thunderRuntime.charge + dt * cfg.chargeRate * brew);
-    thunderRuntime.burst *= Math.exp(-dt * cfg.burstDecay);
-    thunderRuntime.cooldown = Math.max(0, thunderRuntime.cooldown - dt);
-
-    const threshold = Math.min(0.98, Math.max(0.05, cfg.dischargeThreshold));
-    const range = Math.max(1e-4, 1 - threshold);
-    const band = Math.max(0, thunderRuntime.charge - threshold) / range;
-    const rate = band * band * cfg.flashChance * (0.55 + thunderRuntime.charge * 1.1);
-    if (thunderRuntime.cooldown <= 0 && Math.random() < rate * dt) triggerFlash();
-
-    const flicker = Math.max(
-      Math.pow(Math.max(0, Math.sin(thunderTime.value * thunderRuntime.flickerFreq)), 9),
-      Math.pow(Math.max(0, Math.sin(thunderTime.value * thunderRuntime.microFreq)), 6)
-    );
-    thunderFlash.value = thunderRuntime.burst * (0.18 + 0.82 * flicker);
-    thunderCharge.value = Math.min(1,
-      Math.pow(thunderRuntime.charge, 1.28) * (0.86 + 0.14 * brew) + thunderFlash.value * 0.22
-    );
-  }
-
   // ---- Resize ----
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -319,7 +170,7 @@ async function init() {
   // ---- Animate ----
   renderer.setAnimationLoop(() => {
     const dt = Math.min(0.1, clock.getDelta());
-    updateThunder(dt);
+    thunder.update(dt);
     controls.update();
     fluid.step(renderer);
     renderer.render(scene, camera);
