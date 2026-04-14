@@ -10,6 +10,7 @@ raymarching, and procedural effects.
   modulation
 - 🔀 **Mesh Morphing** - Smooth position-based geometry morphing
 - 🎯 **Raymarching** - Adaptive raymarching and volumetric rendering utilities
+- ⚡ **Thunder Lightning** - Volumetric contained-lightning with fluid-driven filaments
 - 🧩 **Composable** - Pure TSL nodes that compose naturally with Three.js WebGPU
 - 📦 **Tree-shakeable** - Modular exports for optimal bundle size
 - 🎨 **Example Gallery** - 13+ interactive examples showcasing different
@@ -133,6 +134,56 @@ material.positionNode = knotMorphPosition({
 });
 ```
 
+### Thunder (`@pipefold/lib3/thunder`)
+
+Volumetric contained-lightning effect driven by fluid simulation fields.
+
+#### `createThunderNode(options)`
+
+Creates a TSL raymarching node that renders lightning filaments inside a unit box.
+
+**Parameters:**
+
+- `densityTexture` - Data3DTexture: Fluid density texture
+- `pressureTexture` - Data3DTexture: Fluid pressure texture
+- `curlTexture` - Data3DTexture: Fluid curl texture
+- `preset` - object: Initial uniform values (default: `THUNDER_PRESETS['Contained Cocoon']`)
+
+**Returns:** `{ node, uniforms }` — the TSL node and all thunder uniforms
+
+#### `createThunderStateMachine(uniforms, config?)`
+
+Creates the JS state machine that drives charge build-up and stochastic flash discharge.
+
+**Parameters:**
+
+- `uniforms` - object: The uniforms returned by `createThunderNode`
+- `config` - object: Optional preset config (default: Contained Cocoon)
+
+**Returns:** `{ update(dt), triggerFlash(), setPreset(name) }`
+
+#### `THUNDER_PRESETS`
+
+Named parameter presets: `'Contained Cocoon'`, `'Silent Pressure'`, `'Caged Arc Storm'`, `'Overcharged Core'`
+
+**Usage:**
+
+```javascript
+import { createThunderNode, createThunderStateMachine } from "@pipefold/lib3/thunder";
+
+const { node, uniforms } = createThunderNode({
+  densityTexture: fluid.getDensityTexture3D(),
+  pressureTexture: fluid.getPressureTexture3D(),
+  curlTexture: fluid.getCurlTexture3D(),
+});
+
+const thunder = createThunderStateMachine(uniforms);
+thunder.setPreset('Caged Arc Storm');
+
+// In animation loop:
+thunder.update(deltaTime);
+```
+
 ### Raymarching (`@pipefold/lib3`)
 
 #### `adaptiveRaymarch(maxSteps, callback, threshold)`
@@ -206,7 +257,11 @@ lib3/
 │   ├── index.js         # Main exports
 │   ├── waves.js         # Wave displacement functions
 │   ├── knotMorph.js     # Morphing utilities
-│   └── raymarch.js      # Raymarching functions
+│   ├── raymarch.js      # Raymarching functions
+│   ├── fluidSim.js      # SmokeVolume fluid simulation
+│   ├── smokeMaterial.js  # Volumetric smoke material
+│   ├── blueNoise.js     # Compute mip-aware blue noise
+│   └── thunder.js       # Contained thunder effect
 ├── examples/            # Interactive examples
 ├── dist/                # Built library (published)
 └── package.json
@@ -223,6 +278,7 @@ import { sphericalWaveDisplacement, knotMorphPosition } from "@pipefold/lib3";
 // Individual modules (smaller bundles)
 import { sphericalWaveDisplacement } from "@pipefold/lib3/waves";
 import { knotMorphPosition } from "@pipefold/lib3/knotMorph";
+import { createThunderNode, THUNDER_PRESETS } from "@pipefold/lib3/thunder";
 ```
 
 ## WebGPU Compatibility
